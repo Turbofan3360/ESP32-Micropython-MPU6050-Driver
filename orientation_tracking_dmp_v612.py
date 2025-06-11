@@ -246,7 +246,7 @@ class MPU6050:
         
         self.local_velocity = [0, 0, 0]
         self.world_velocity = [0, 0, 0]
-        self.first_run_flag = 0
+        self.first_run_flag = False
         self.new_data_available = 0
         self.calibration_values = {"ac_x" : 0,
                                    "ac_y" : 0,
@@ -492,7 +492,7 @@ class MPU6050:
         # Initialise self.start_time only on the first execution of this method
         if not self.first_run_flag:
             self.start_time = time.time_ns()
-            self.first_run_flag = 1
+            self.first_run_flag = True
 
         # Checking if there's new data in the FIFO buffer
         if self.new_data_available:
