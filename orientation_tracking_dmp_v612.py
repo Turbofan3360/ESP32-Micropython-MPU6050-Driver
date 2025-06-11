@@ -357,12 +357,6 @@ class MPU6050:
         self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self.updatedata)
         self.log("Pin-driven interrupts activated")
     
-    
-    
-    
-    
-    
-    
     def calibrate(self, length):
         d_ax = d_ay = d_az = counter = ready = 0
         end_time = time.time()+length
@@ -415,6 +409,11 @@ class MPU6050:
             time.sleep(0.01)
         
         self.log("Fine calibration complete")
+    
+    
+    
+    
+    
     
     def updatedata(self, pin=None):
         self.new_data_available = 1
