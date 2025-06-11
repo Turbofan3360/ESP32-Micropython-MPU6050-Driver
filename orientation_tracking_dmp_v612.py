@@ -413,7 +413,7 @@ class MPU6050:
             
             d_ax += self.decode_accel_data(data[0:2])
             d_ay += self.decode_accel_data(data[2:4])
-            d_az += self.decode_accel_data(data[4:6])
+            d_az += self.decode_accel_data(data[4:6]) - 9.81
             
             counter += 1
             
@@ -424,29 +424,29 @@ class MPU6050:
         self.calibration_values["ac_z"] = d_az/counter
         self.log("Coarse calibration complete")
         
+        tolerance = 0.005
+        divisor = 8
+        
         # Fine tuning the calibration offsets        
-        while ready < 3:
+        while ready != 3:
             data = self.module.readfrom_mem(self.imuaddress, self.registers["accel"], 14)
             
-            ax = self.decode_accel_data(data[0:2])
-            ay = self.decode_accel_data(data[2:4])
-            az = self.decode_accel_data(data[4:6])
+            ax = self.decode_accel_data(data[0:2]) + self.calibration_values["ac_x"]
+            ay = self.decode_accel_data(data[2:4]) + self.calibration_values["ac_y"] 
+            az = self.decode_accel_data(data[4:6]) + self.calibration_values["ac_z"]
             
             ready = 0
-            divisor = 10
             
-            if abs(ax) > 0.01:
+            if abs(ax) > tolerance:
                 self.calibration_values["ac_x"] -= ax/divisor
             else:
                 ready += 1
-            if abs(ay) > 0.01:
+            if abs(ay) > tolerance:
                 self.calibration_values["ac_y"] -= ay/divisor
             else:
                 ready += 1
-                
-            ### NEED TO FIGURE OUT THIS GRAVITY OFFSET ###
-            
-            if abs(az-9.81) > 0.01:
+                            
+            if abs(az-9.81) > tolerance:
                 self.calibration_values["ac_z"] -= (az-9.81)/divisor
             else:
                 ready += 1
@@ -556,9 +556,9 @@ class MPU6050:
         qy = self.decode_quat_data(data[8:12])
         qz = self.decode_quat_data(data[12:16])
         
-        ax = self.decode_accel_data(data[16:18]) - self.calibration_values["ac_x"]
-        ay = self.decode_accel_data(data[18:20]) - self.calibration_values["ac_y"]
-        az = self.decode_accel_data(data[20:22]) - self.calibration_values["ac_z"]
+        ax = self.decode_accel_data(data[16:18]) + self.calibration_values["ac_x"]
+        ay = self.decode_accel_data(data[18:20]) + self.calibration_values["ac_y"]
+        az = self.decode_accel_data(data[20:22]) + self.calibration_values["ac_z"]
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
