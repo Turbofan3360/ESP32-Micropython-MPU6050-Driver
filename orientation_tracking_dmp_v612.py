@@ -419,9 +419,9 @@ class MPU6050:
             
             time.sleep(0.1)
         
-        self.calibration_values["ac_x"] = dac_x/counter
-        self.calibration_values["ac_y"] = dac_y/counter
-        self.calibration_values["ac_z"] = dac_z/counter
+        self.calibration_values["ac_x"] = d_ax/counter
+        self.calibration_values["ac_y"] = d_ay/counter
+        self.calibration_values["ac_z"] = d_az/counter
         self.log("Coarse calibration complete")
         
         # Fine tuning the calibration offsets        
