@@ -267,6 +267,11 @@ class MPU6050:
     
     def log(self, string):
         print(string)
+    
+    def write_dmp_byte(self, address, memory_offset, byte):
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([address]))
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([memory_offset]))
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([byte]))
         
     def dmpsetup(self, int_pin):
         no_banks = 12
@@ -293,9 +298,6 @@ class MPU6050:
             self.log("Loading firmware bank {}".format(bank))
             
             byte_offset = 0
-            
-            # Setting firmware bank being written into memory
-            self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([bank]))
 
             if bank == 11:
                 limit = 246
@@ -306,8 +308,7 @@ class MPU6050:
                     firmware_byte = self.dmp_firmware_v612[bank*256+byte_offset]
                     
                     # Writing the firmware byte
-                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
-                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([firmware_byte]))
+                    self.write_dmp_byte(bank, byte_offset, firmware_byte)
                     
                     # Setting the byte we want to read back, and then reading it back to check
                     self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
@@ -319,64 +320,24 @@ class MPU6050:
             time.sleep(0.01)
         
         # Enabling 6-axis low power quaternion output from DMP
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA3]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x20]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA4]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x28]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA5]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x30]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA6]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x30]))
+        self.write_dmp_byte(0xA, 0xA3, 0x20)
+        self.write_dmp_byte(0xA, 0xA4, 0x28)
+        self.write_dmp_byte(0xA, 0xA5, 0x30)
+        self.write_dmp_byte(0xA, 0xA6, 0x30)
         
         self.log("6-axis low power quaternion output enabled")
         
         # Enabling raw accel/gyro data ouput from DMP into FIFO
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAB]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAC]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC0]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAD]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC8]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAE]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC2]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAF]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC4]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB0]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xCC]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB1]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC6]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB2]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB3]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB4]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
+        self.write_dmp_byte(0xA, 0xAB, 0xA3)
+        self.write_dmp_byte(0xA, 0xAC, 0xC0)
+        self.write_dmp_byte(0xA, 0xAD, 0xC8)
+        self.write_dmp_byte(0xA, 0xAE, 0xC2)
+        self.write_dmp_byte(0xA, 0xAF, 0xC4)
+        self.write_dmp_byte(0xA, 0xB0, 0xCC)
+        self.write_dmp_byte(0xA, 0xB1, 0xC6)
+        self.write_dmp_byte(0xA, 0xB2, 0xA3)
+        self.write_dmp_byte(0xA, 0xB3, 0xA3)
+        self.write_dmp_byte(0xA, 0xB4, 0xA3)
         
         self.log("Accel/gyro raw data ouput to FIFO enabled")
         
