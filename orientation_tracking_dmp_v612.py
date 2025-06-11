@@ -509,7 +509,7 @@ class MPU6050:
             self.new_data_available = 0
         
         # Extracting quaternion and acceleration data from the data frame and decoding it to ints
-        data = self.data[0:22]
+        data = self.data
         
         qw = self.decode_quat_data(data[0:4])
         qx = self.decode_quat_data(data[4:8])
