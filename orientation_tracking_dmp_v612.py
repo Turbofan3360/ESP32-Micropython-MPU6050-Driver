@@ -536,7 +536,7 @@ class MPU6050:
         body_acceleration = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
         world_acceleration = self.world_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
       
-        dt = (time.time_ns() - self.start_time)*(1e-9)
+        dt = (time.time_ns() - self.start_time)/1000000000
         self.start_time = time.time_ns()
         
         self.local_velocity[0] += body_acceleration[0]*dt
