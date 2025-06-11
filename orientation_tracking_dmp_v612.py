@@ -267,6 +267,11 @@ class MPU6050:
     
     def log(self, string):
         print(string)
+    
+    def write_dmp_byte(self, address, memory_offset, byte):
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([address]))
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([memory_offset]))
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([byte]))
         
     def dmpsetup(self, int_pin):
         no_banks = 12
@@ -293,9 +298,6 @@ class MPU6050:
             self.log("Loading firmware bank {}".format(bank))
             
             byte_offset = 0
-            
-            # Setting firmware bank being written into memory
-            self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([bank]))
 
             if bank == 11:
                 limit = 246
@@ -306,8 +308,7 @@ class MPU6050:
                     firmware_byte = self.dmp_firmware_v612[bank*256+byte_offset]
                     
                     # Writing the firmware byte
-                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
-                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([firmware_byte]))
+                    self.write_dmp_byte(bank, byte_offset, firmware_byte)
                     
                     # Setting the byte we want to read back, and then reading it back to check
                     self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
@@ -319,64 +320,24 @@ class MPU6050:
             time.sleep(0.01)
         
         # Enabling 6-axis low power quaternion output from DMP
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA3]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x20]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA4]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x28]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA5]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x30]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xA6]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0x30]))
+        self.write_dmp_byte(0xA, 0xA3, 0x20)
+        self.write_dmp_byte(0xA, 0xA4, 0x28)
+        self.write_dmp_byte(0xA, 0xA5, 0x30)
+        self.write_dmp_byte(0xA, 0xA6, 0x30)
         
         self.log("6-axis low power quaternion output enabled")
         
         # Enabling raw accel/gyro data ouput from DMP into FIFO
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAB]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAC]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC0]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAD]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC8]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAE]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC2]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xAF]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC4]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB0]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xCC]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB1]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xC6]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB2]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB3]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
-        
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([0xA]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([0xB4]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([0xA3]))
+        self.write_dmp_byte(0xA, 0xAB, 0xA3)
+        self.write_dmp_byte(0xA, 0xAC, 0xC0)
+        self.write_dmp_byte(0xA, 0xAD, 0xC8)
+        self.write_dmp_byte(0xA, 0xAE, 0xC2)
+        self.write_dmp_byte(0xA, 0xAF, 0xC4)
+        self.write_dmp_byte(0xA, 0xB0, 0xCC)
+        self.write_dmp_byte(0xA, 0xB1, 0xC6)
+        self.write_dmp_byte(0xA, 0xB2, 0xA3)
+        self.write_dmp_byte(0xA, 0xB3, 0xA3)
+        self.write_dmp_byte(0xA, 0xB4, 0xA3)
         
         self.log("Accel/gyro raw data ouput to FIFO enabled")
         
@@ -413,40 +374,40 @@ class MPU6050:
             
             d_ax += self.decode_accel_data(data[0:2])
             d_ay += self.decode_accel_data(data[2:4])
-            d_az += self.decode_accel_data(data[4:6])
+            d_az += self.decode_accel_data(data[4:6]) - 9.81
             
             counter += 1
             
             time.sleep(0.1)
         
-        self.calibration_values["ac_x"] = dac_x/counter
-        self.calibration_values["ac_y"] = dac_y/counter
-        self.calibration_values["ac_z"] = dac_z/counter
+        self.calibration_values["ac_x"] = d_ax/counter
+        self.calibration_values["ac_y"] = d_ay/counter
+        self.calibration_values["ac_z"] = d_az/counter
         self.log("Coarse calibration complete")
         
+        tolerance = 0.005
+        divisor = 8
+        
         # Fine tuning the calibration offsets        
-        while ready < 3:
+        while ready != 3:
             data = self.module.readfrom_mem(self.imuaddress, self.registers["accel"], 14)
             
-            ax = self.decode_accel_data(data[0:2])
-            ay = self.decode_accel_data(data[2:4])
-            az = self.decode_accel_data(data[4:6])
+            ax = self.decode_accel_data(data[0:2]) + self.calibration_values["ac_x"]
+            ay = self.decode_accel_data(data[2:4]) + self.calibration_values["ac_y"] 
+            az = self.decode_accel_data(data[4:6]) + self.calibration_values["ac_z"]
             
             ready = 0
-            divisor = 10
             
-            if abs(ax) > 0.01:
+            if abs(ax) > tolerance:
                 self.calibration_values["ac_x"] -= ax/divisor
             else:
                 ready += 1
-            if abs(ay) > 0.01:
+            if abs(ay) > tolerance:
                 self.calibration_values["ac_y"] -= ay/divisor
             else:
                 ready += 1
-                
-            ### NEED TO FIGURE OUT THIS GRAVITY OFFSET ###
-            
-            if abs(az-9.81) > 0.01:
+                            
+            if abs(az-9.81) > tolerance:
                 self.calibration_values["ac_z"] -= (az-9.81)/divisor
             else:
                 ready += 1
@@ -556,9 +517,9 @@ class MPU6050:
         qy = self.decode_quat_data(data[8:12])
         qz = self.decode_quat_data(data[12:16])
         
-        ax = self.decode_accel_data(data[16:18]) - self.calibration_values["ac_x"]
-        ay = self.decode_accel_data(data[18:20]) - self.calibration_values["ac_y"]
-        az = self.decode_accel_data(data[20:22]) - self.calibration_values["ac_z"]
+        ax = self.decode_accel_data(data[16:18]) + self.calibration_values["ac_x"]
+        ay = self.decode_accel_data(data[18:20]) + self.calibration_values["ac_y"]
+        az = self.decode_accel_data(data[20:22]) + self.calibration_values["ac_z"]
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
