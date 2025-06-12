@@ -297,6 +297,9 @@ class MPU6050:
         for bank in range(no_banks):
             self.log("Loading firmware bank {}".format(bank))
             
+            # Writing firmware bank
+            self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([bank]))
+            
             byte_offset = 0
 
             if bank == 11:
@@ -308,7 +311,8 @@ class MPU6050:
                     firmware_byte = self.dmp_firmware_v612[bank*256+byte_offset]
                     
                     # Writing the firmware byte
-                    self.write_dmp_byte(bank, byte_offset, firmware_byte)
+                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
+                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([firmware_byte]))
                     
                     # Setting the byte we want to read back, and then reading it back to check
                     self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
@@ -483,9 +487,6 @@ class MPU6050:
         w_ay = 2*(qx*qy + qw*qz)*ax + (qw*qw - qx*qx + qy*qy - qz*qz)*ay + 2*(qy*qz - qw*qx)*az
         w_az = 2*(qx*qz - qw*qy)*ax + 2*(qy*qz + qw*qx)*ay + (qw*qw - qx*qx - qy*qy + qz*qz)*az
         
-        # Removing gravity
-        w_az -= 9.81
-        
         return w_ax, w_ay, w_az
     
     @micropython.native
@@ -534,19 +535,19 @@ class MPU6050:
         
             orientation = self.quat_to_euler(qw, qx, qy, qz)
         
-        body_acceleration = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
-        world_acceleration = self.world_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
+        body_ax, body_ay, body_az = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
+        world_ax, world_ay, world_az = self.world_frame_acceleration(body_ax, body_ay, body_az, qw, qx, qy, qz)
       
         dt = (time.time_ns() - self.start_time)*(1e-9)
         self.start_time = time.time_ns()
         
-        self.local_velocity[0] += body_acceleration[0]*dt
-        self.local_velocity[1] += body_acceleration[1]*dt
-        self.local_velocity[2] += body_acceleration[2]*dt
+        self.local_velocity[0] += body_ax*dt
+        self.local_velocity[1] += body_ay*dt
+        self.local_velocity[2] += body_az*dt
         
-        self.world_velocity[0] += world_acceleration[0]*dt
-        self.world_velocity[1] += world_acceleration[1]*dt
-        self.world_velocity[2] += world_acceleration[2]*dt
+        self.world_velocity[0] += world_ax*dt
+        self.world_velocity[1] += world_ay*dt
+        self.world_velocity[2] += world_az*dt
 
         return [qw, qx, qy, qz], orientation, self.local_velocity, self.world_velocity
         
