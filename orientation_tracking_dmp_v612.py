@@ -247,7 +247,7 @@ class MPU6050:
         self.local_velocity = [0, 0, 0]
         self.world_velocity = [0, 0, 0]
         self.first_run_flag = False
-        self.new_data_available = 0
+        self.new_data_available = False
         self.calibration_values = {"ac_x" : 0,
                                    "ac_y" : 0,
                                    "ac_z" : 0,
@@ -420,7 +420,7 @@ class MPU6050:
     
     
     def updatedata(self, pin=None):
-        self.new_data_available = 1
+        self.new_data_available = True
         
     @micropython.native
     def decode_accel_data(self, data):
@@ -507,7 +507,7 @@ class MPU6050:
                 data_frame = self.module.readfrom_mem(self.imuaddress, self.registers["fifo"], count)
                 self.data = data_frame
             
-            self.new_data_available = 0
+            self.new_data_available = False
         
         # Extracting quaternion and acceleration data from the data frame and decoding it to ints
         data = self.data
