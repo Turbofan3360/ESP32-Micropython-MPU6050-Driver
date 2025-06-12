@@ -246,7 +246,7 @@ class MPU6050:
         
         self.local_velocity = [0, 0, 0]
         self.world_velocity = [0, 0, 0]
-        self.first_run_flag = 0
+        self.first_run_flag = False
         self.new_data_available = 0
         self.calibration_values = {"ac_x" : 0,
                                    "ac_y" : 0,
@@ -361,12 +361,6 @@ class MPU6050:
         self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self.updatedata)
         self.log("Pin-driven interrupts activated")
     
-    
-    
-    
-    
-    
-    
     def calibrate(self, length):
         d_ax = d_ay = d_az = counter = ready = 0
         end_time = time.time()+length
@@ -419,6 +413,11 @@ class MPU6050:
             time.sleep(0.01)
         
         self.log("Fine calibration complete")
+    
+    
+    
+    
+    
     
     def updatedata(self, pin=None):
         self.new_data_available = 1
@@ -494,7 +493,7 @@ class MPU6050:
         # Initialise self.start_time only on the first execution of this method
         if not self.first_run_flag:
             self.start_time = time.time_ns()
-            self.first_run_flag = 1
+            self.first_run_flag = True
 
         # Checking if there's new data in the FIFO buffer
         if self.new_data_available:
@@ -511,7 +510,7 @@ class MPU6050:
             self.new_data_available = 0
         
         # Extracting quaternion and acceleration data from the data frame and decoding it to ints
-        data = self.data[0:22]
+        data = self.data
         
         qw = self.decode_quat_data(data[0:4])
         qx = self.decode_quat_data(data[4:8])
@@ -538,7 +537,7 @@ class MPU6050:
         body_ax, body_ay, body_az = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
         world_ax, world_ay, world_az = self.world_frame_acceleration(body_ax, body_ay, body_az, qw, qx, qy, qz)
       
-        dt = (time.time_ns() - self.start_time)*(1e-9)
+        dt = (time.time_ns() - self.start_time)/1000000000
         self.start_time = time.time_ns()
         
         self.local_velocity[0] += body_ax*dt
