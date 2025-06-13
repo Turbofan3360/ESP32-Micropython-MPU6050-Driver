@@ -431,7 +431,7 @@ class MPU6050:
         data_point /= 16384
         data_point *= 9.81
         
-        return data_point
+        return round(data_point, 3)
     
     @micropython.native
     def decode_quat_data(self, data):
