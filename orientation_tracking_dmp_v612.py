@@ -383,7 +383,7 @@ class MPU6050:
         self.calibration_values["ac_z"] = d_az/counter
         self.log("Coarse calibration complete")
         
-        tolerance = 0.005
+        tolerance = 0.01
         divisor = 8
         
         # Fine tuning the calibration offsets        
@@ -431,7 +431,7 @@ class MPU6050:
         data_point /= 16384
         data_point *= 9.81
         
-        return round(data_point, 3)
+        return data_point
     
     @micropython.native
     def decode_quat_data(self, data):
@@ -517,9 +517,9 @@ class MPU6050:
         qy = self.decode_quat_data(data[8:12])
         qz = self.decode_quat_data(data[12:16])
         
-        ax = self.decode_accel_data(data[16:18]) + self.calibration_values["ac_x"]
-        ay = self.decode_accel_data(data[18:20]) + self.calibration_values["ac_y"]
-        az = self.decode_accel_data(data[20:22]) + self.calibration_values["ac_z"]
+        ax = round(self.decode_accel_data(data[16:18]) + self.calibration_values["ac_x"], 2)
+        ay = round(self.decode_accel_data(data[18:20]) + self.calibration_values["ac_y"], 2)
+        az = round(self.decode_accel_data(data[20:22]) + self.calibration_values["ac_z"], 2)
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
@@ -548,7 +548,7 @@ class MPU6050:
         self.world_velocity[1] += world_ay*dt
         self.world_velocity[2] += world_az*dt
 
-        return [qw, qx, qy, qz], orientation, self.local_velocity, self.world_velocity
+        return [qw, qx, qy, qz], orientation, ax, ay, az#, self.local_velocity, self.world_velocity
         
 
 module = MPU6050(46, 3)
