@@ -368,11 +368,11 @@ class MPU6050:
         self.log("Calibrating")
         # Coarse calibration offsets
         while time.time() < end_time:
-            data = self.module.readfrom_mem(self.imuaddress, self.registers["accel"], 14)
+            self.newdata()
             
-            d_ax += self.decode_accel_data(data[0:2])
-            d_ay += self.decode_accel_data(data[2:4])
-            d_az += self.decode_accel_data(data[4:6]) - 9.81
+            d_ax += self.decode_accel_data(self.data[16:18])
+            d_ay += self.decode_accel_data(self.data[18:20])
+            d_az += self.decode_accel_data(self.data[20:22]) - 9.81
             
             counter += 1
             
@@ -388,11 +388,11 @@ class MPU6050:
         
         # Fine tuning the calibration offsets        
         while ready != 3:
-            data = self.module.readfrom_mem(self.imuaddress, self.registers["accel"], 14)
+            self.newdata()
             
-            ax = self.decode_accel_data(data[0:2]) + self.calibration_values["ac_x"]
-            ay = self.decode_accel_data(data[2:4]) + self.calibration_values["ac_y"] 
-            az = self.decode_accel_data(data[4:6]) + self.calibration_values["ac_z"]
+            ax = self.decode_accel_data(self.data[16:18]) + self.calibration_values["ac_x"]
+            ay = self.decode_accel_data(self.data[18:20]) + self.calibration_values["ac_y"] 
+            az = self.decode_accel_data(self.data[20:22]) + self.calibration_values["ac_z"]
             
             ready = 0
             
@@ -418,6 +418,21 @@ class MPU6050:
     
     
     
+    
+    @micropython.native
+    def newdata(self):
+        if self.new_data_available:
+            # Finding how many bytes there are in the FIFO
+            count_h = self.module.readfrom_mem(self.imuaddress, 0x72, 1)[0]
+            count_l = self.module.readfrom_mem(self.imuaddress, 0x73, 1)[0]
+            count = (count_h << 8) | count_l
+            
+            if count >= 22:
+                # Gets data from FIFO buffer (quaternion + accelerometer)
+                data_frame = self.module.readfrom_mem(self.imuaddress, self.registers["fifo"], count)
+                self.data = data_frame
+            
+            self.new_data_available = False
     
     def updatedata(self, pin=None):
         self.new_data_available = True
@@ -495,19 +510,7 @@ class MPU6050:
             self.start_time = time.time_ns()
             self.first_run_flag = True
 
-        # Checking if there's new data in the FIFO buffer
-        if self.new_data_available:
-            # Finding how many bytes there are in the FIFO
-            count_h = self.module.readfrom_mem(self.imuaddress, 0x72, 1)[0]
-            count_l = self.module.readfrom_mem(self.imuaddress, 0x73, 1)[0]
-            count = (count_h << 8) | count_l
-            
-            if count >= 22:
-                # Gets data from FIFO buffer (quaternion + accelerometer)
-                data_frame = self.module.readfrom_mem(self.imuaddress, self.registers["fifo"], count)
-                self.data = data_frame
-            
-            self.new_data_available = False
+        self.newdata()
         
         # Extracting quaternion and acceleration data from the data frame and decoding it to ints
         data = self.data
