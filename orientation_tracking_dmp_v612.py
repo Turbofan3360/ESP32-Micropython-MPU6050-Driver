@@ -267,11 +267,6 @@ class MPU6050:
     
     def log(self, string):
         print(string)
-    
-    def write_dmp_byte(self, address, memory_offset, byte):
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([address]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([memory_offset]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([byte]))
         
     def dmpsetup(self, int_pin):
         no_banks = 12
@@ -323,28 +318,6 @@ class MPU6050:
             
             time.sleep(0.01)
         
-        # Enabling 6-axis low power quaternion output from DMP
-        self.write_dmp_byte(0xA, 0xA3, 0x20)
-        self.write_dmp_byte(0xA, 0xA4, 0x28)
-        self.write_dmp_byte(0xA, 0xA5, 0x30)
-        self.write_dmp_byte(0xA, 0xA6, 0x30)
-        
-        self.log("6-axis low power quaternion output enabled")
-        
-        # Enabling raw accel/gyro data ouput from DMP into FIFO
-        self.write_dmp_byte(0xA, 0xAB, 0xA3)
-        self.write_dmp_byte(0xA, 0xAC, 0xC0)
-        self.write_dmp_byte(0xA, 0xAD, 0xC8)
-        self.write_dmp_byte(0xA, 0xAE, 0xC2)
-        self.write_dmp_byte(0xA, 0xAF, 0xC4)
-        self.write_dmp_byte(0xA, 0xB0, 0xCC)
-        self.write_dmp_byte(0xA, 0xB1, 0xC6)
-        self.write_dmp_byte(0xA, 0xB2, 0xA3)
-        self.write_dmp_byte(0xA, 0xB3, 0xA3)
-        self.write_dmp_byte(0xA, 0xB4, 0xA3)
-        
-        self.log("Accel/gyro raw data ouput to FIFO enabled")
-        
         # Writing firmware start byte
         self.module.writeto_mem(self.imuaddress, self.registers["dmp_firmware_start_1"], bytearray([0x04]))
         self.log("Firmware started")
@@ -390,9 +363,9 @@ class MPU6050:
         while ready != 3:
             self.newdata()
             
-            ax = self.decode_accel_data(self.data[16:18]) + self.calibration_values["ac_x"]
-            ay = self.decode_accel_data(self.data[18:20]) + self.calibration_values["ac_y"] 
-            az = self.decode_accel_data(self.data[20:22]) + self.calibration_values["ac_z"]
+            ax = self.decode_accel_data(self.data[28:30]) + self.calibration_values["ac_x"]
+            ay = self.decode_accel_data(self.data[32:34]) + self.calibration_values["ac_y"] 
+            az = self.decode_accel_data(self.data[36:38]) + self.calibration_values["ac_z"]
             
             ready = 0
             
@@ -403,8 +376,7 @@ class MPU6050:
             if abs(ay) > tolerance:
                 self.calibration_values["ac_y"] -= ay/divisor
             else:
-                ready += 1
-                            
+                ready += 1    
             if abs(az-9.81) > tolerance:
                 self.calibration_values["ac_z"] -= (az-9.81)/divisor
             else:
@@ -520,9 +492,9 @@ class MPU6050:
         qy = self.decode_quat_data(data[8:12])
         qz = self.decode_quat_data(data[12:16])
         
-        ax = round(self.decode_accel_data(data[16:18]) + self.calibration_values["ac_x"], 2)
-        ay = round(self.decode_accel_data(data[18:20]) + self.calibration_values["ac_y"], 2)
-        az = round(self.decode_accel_data(data[20:22]) + self.calibration_values["ac_z"], 2)
+        ax = round(self.decode_accel_data(data[28:30]) + self.calibration_values["ac_x"], 2)
+        ay = round(self.decode_accel_data(data[32:34]) + self.calibration_values["ac_y"], 2)
+        az = round(self.decode_accel_data(data[36:38]) + self.calibration_values["ac_z"], 2)
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
@@ -537,25 +509,25 @@ class MPU6050:
         
             orientation = self.quat_to_euler(qw, qx, qy, qz)
         
-        body_ax, body_ay, body_az = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
-        world_ax, world_ay, world_az = self.world_frame_acceleration(body_ax, body_ay, body_az, qw, qx, qy, qz)
+        b_ax, b_ay, b_az = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
+        w_ax, w_ay, w_az = self.world_frame_acceleration(b_ax, b_ay, b_az, qw, qx, qy, qz)
       
         dt = (time.time_ns() - self.start_time)/1000000000
         self.start_time = time.time_ns()
         
-        self.local_velocity[0] += body_ax*dt
-        self.local_velocity[1] += body_ay*dt
-        self.local_velocity[2] += body_az*dt
+        self.local_velocity[0] += round(b_ax*dt, 3)
+        self.local_velocity[1] += round(b_ay*dt, 3)
+        self.local_velocity[2] += round(b_az*dt, 3)
         
-        self.world_velocity[0] += world_ax*dt
-        self.world_velocity[1] += world_ay*dt
-        self.world_velocity[2] += world_az*dt
+        self.world_velocity[0] += round(w_ax*dt, 3)
+        self.world_velocity[1] += round(w_ay*dt, 3)
+        self.world_velocity[2] += round(w_az*dt, 3)
 
         return [qw, qx, qy, qz], orientation, ax, ay, az#, self.local_velocity, self.world_velocity
         
 
 module = MPU6050(46, 3)
-module.calibrate(10)
 module.dmpsetup(1)
+module.calibrate(10)
 while True:
     print(module.imutrack())
