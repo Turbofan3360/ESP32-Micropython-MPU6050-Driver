@@ -11,9 +11,6 @@ class MPU6050:
         self.imuaddress = 0x68
         
         self.registers = {
-            "accel" : 0x3B,
-            "gyro" : 0x43,
-            "temperature" : 0x41,
             "accel_config" : 0x1C,
             "gyro_config" : 0x1B,
             "fifo" : 0x74,
@@ -267,7 +264,12 @@ class MPU6050:
     
     def log(self, string):
         print(string)
-        
+    
+    def write_dmp_byte(self, address, memory_offset, byte):
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([address]))
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([memory_offset]))
+        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([byte]))
+    
     def dmpsetup(self, int_pin):
         no_banks = 12
         
@@ -317,6 +319,28 @@ class MPU6050:
                         byte_offset += 1
             
             time.sleep(0.01)
+        
+        # Enabling 6-axis low power quaternion output from DMP
+        self.write_dmp_byte(0xA, 0xA3, 0x20)
+        self.write_dmp_byte(0xA, 0xA4, 0x28)
+        self.write_dmp_byte(0xA, 0xA5, 0x30)
+        self.write_dmp_byte(0xA, 0xA6, 0x30)
+        
+        self.log("6-axis low power quaternion output enabled")
+        
+        # Enabling raw accel/gyro data ouput from DMP into FIFO
+        self.write_dmp_byte(0xA, 0xAB, 0xA3)
+        self.write_dmp_byte(0xA, 0xAC, 0xC0)
+        self.write_dmp_byte(0xA, 0xAD, 0xC8)
+        self.write_dmp_byte(0xA, 0xAE, 0xC2)
+        self.write_dmp_byte(0xA, 0xAF, 0xC4)
+        self.write_dmp_byte(0xA, 0xB0, 0xCC)
+        self.write_dmp_byte(0xA, 0xB1, 0xC6)
+        self.write_dmp_byte(0xA, 0xB2, 0xA3)
+        self.write_dmp_byte(0xA, 0xB3, 0xA3)
+        self.write_dmp_byte(0xA, 0xB4, 0xA3)
+        
+        self.log("Accel/gyro raw data ouput to FIFO enabled")
         
         # Writing firmware start byte
         self.module.writeto_mem(self.imuaddress, self.registers["dmp_firmware_start_1"], bytearray([0x04]))
