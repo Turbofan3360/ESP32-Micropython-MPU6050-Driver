@@ -423,10 +423,9 @@ class MPU6050:
             count_l = self.module.readfrom_mem(self.imuaddress, 0x73, 1)[0]
             count = (count_h << 8) | count_l
             
-            if count >= 22:
-                # Gets data from FIFO buffer (quaternion + accelerometer)
-                data_frame = self.module.readfrom_mem(self.imuaddress, self.registers["fifo"], count)
-                self.data = data_frame
+            # Gets data from FIFO buffer (quaternion + accelerometer)
+            data_frame = self.module.readfrom_mem(self.imuaddress, self.registers["fifo"], count)
+            self.data = data_frame
             
             self.new_data_available = False
     
