@@ -418,7 +418,7 @@ class MPU6050:
         data_point /= 16384
         data_point *= 9.81
         
-        return data_point
+        return round(data_point, 3)
     
     @micropython.native
     def decode_quat_data(self, data):
@@ -492,9 +492,9 @@ class MPU6050:
         qy = self.decode_quat_data(data[8:12])
         qz = self.decode_quat_data(data[12:16])
         
-        ax = round(self.decode_accel_data(data[28:30]) + self.calibration_values["ac_x"], 2)
-        ay = round(self.decode_accel_data(data[32:34]) + self.calibration_values["ac_y"], 2)
-        az = round(self.decode_accel_data(data[36:38]) + self.calibration_values["ac_z"], 2)
+        ax = self.decode_accel_data(data[28:30]) + self.calibration_values["ac_x"]
+        ay = self.decode_accel_data(data[32:34]) + self.calibration_values["ac_y"]
+        az = self.decode_accel_data(data[36:38]) + self.calibration_values["ac_z"]
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
