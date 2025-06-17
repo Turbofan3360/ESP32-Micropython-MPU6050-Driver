@@ -434,9 +434,7 @@ class MPU6050:
         
     @micropython.native
     def decode_accel_data(self, data):
-        data_point = int.from_bytes(data, "big")
-        if data_point >= 32768:
-            data_point -= 65536
+        data_point = struct.unpack(">h", data)
         
         data_point /= 16384
         data_point *= 9.81
@@ -445,9 +443,7 @@ class MPU6050:
     
     @micropython.native
     def decode_quat_data(self, data):
-        data_point = int.from_bytes(data, "big")
-        if data_point >= 2147483648:
-            data_point -= 4294967296
+        data_point = struct.unpack(">l", data)
             
         data_point /= 1073741824
         
