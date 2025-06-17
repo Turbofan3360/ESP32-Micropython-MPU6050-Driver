@@ -367,9 +367,9 @@ class MPU6050:
         while time.time() < end_time:
             self.newdata()
             
-            d_ax += self.decode_accel_data(self.data[16:18])
-            d_ay += self.decode_accel_data(self.data[18:20])
-            d_az += self.decode_accel_data(self.data[20:22]) - 9.81
+            d_ax += self.decode_accel_data(self.data[28:30])
+            d_ay += self.decode_accel_data(self.data[32:34])
+            d_az += self.decode_accel_data(self.data[36:38]) - 9.81
             
             counter += 1
             
