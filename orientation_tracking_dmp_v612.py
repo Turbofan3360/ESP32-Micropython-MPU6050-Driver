@@ -34,6 +34,8 @@ class MPU6050:
             "dmp_firmware_start_1" : 0x70,
             "dmp_firmware_start_2" : 0x71
             }
+        
+        FIFO_REG = const(self.registers["fifo"])
 
         self.dmp_firmware_v612 = [
             # Bank 0
@@ -246,10 +248,13 @@ class MPU6050:
         self.world_velocity = [0, 0, 0]
         self.first_run_flag = False
         self.new_data_available = False
+        self.calibration_offsets = {
+                                "ac_x" : 0,
+                                "ac_y" : 0,
+                                "ac_z" : 0,
+                                }
         
-        D_ACX = const(0)
-        D_ACY = const(0)
-        D_ACZ = const(0)
+        DEG_TO_RAD = const(180/pi)
         
         # Wake up MPU6050
         self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt"], bytes([0x80]))
@@ -368,17 +373,17 @@ class MPU6050:
         while time.time() < end_time:
             self.newdata()
             
-            d_ax += self.decode_accel_data(self.data[28:30])
-            d_ay += self.decode_accel_data(self.data[32:34])
-            d_az += self.decode_accel_data(self.data[36:38]) - 9.81
+            d_ax += self.decode_acceL_data(self.data[28:30])
+            d_ay += self.decode_acceL_data(self.data[32:34])
+            d_az += self.decode_acceL_data(self.data[36:38]) - 9.81
             
             counter += 1
-            
+        
             time.sleep(0.1)
         
-        D_ACX = d_ax/counter
-        D_ACY = d_ay/counter
-        D_ACZ = d_az/counter
+        self.calibration_offsets["ac_x"] = d_ax/counter
+        self.calibration_offsets["ac_y"] = d_ay/counter
+        self.calibration_offsets["ac_z"] = d_az/counter
         self.log("Coarse calibration complete")
         
         tolerance = 0.01
@@ -388,28 +393,32 @@ class MPU6050:
         while ready != 3:
             self.newdata()
             
-            ax = self.decode_accel_data(self.data[28:30]) + D_ACX
-            ay = self.decode_accel_data(self.data[32:34]) + D_ACY
-            az = self.decode_accel_data(self.data[36:38]) + D_ACZ
+            ax = self.decode_acceL_data(self.data[28:30]) + self.calibration_offsets["ac_x"]
+            ay = self.decode_acceL_data(self.data[32:34]) + self.calibration_offsets["ac_y"] 
+            az = self.decode_acceL_data(self.data[36:38]) + self.calibration_offsets["ac_z"]
             
             ready = 0
             
             if abs(ax) > tolerance:
-                D_ACX -= ax/divisor
+                self.calibration_offsets["ac_x"] -= ax/divisor
             else:
                 ready += 1
             if abs(ay) > tolerance:
-                D_ACY -= ay/divisor
-            else:
-                ready += 1    
-            if abs(az-9.81) > tolerance:
-                D_ACZ -= (az-9.81)/divisor
+                self.calibration_offsets["ac_y"] -= ay/divisor
             else:
                 ready += 1
-                
+            if abs(az-9.81) > tolerance:
+                self.calibration_offsets["ac_z"] -= (az-9.81)/divisor
+            else:
+                ready += 1
+                                
             time.sleep(0.01)
         
         self.log("Fine calibration complete")
+        
+        DAC_X = const(self.calibration_offsets["ac_x"])
+        DAC_Y = const(self.calibration_offsets["ac_y"])
+        DAC_Z = const(self.calibration_offsets["ac_z"])
     
     
     
@@ -425,7 +434,7 @@ class MPU6050:
             count = (count_h << 8) | count_l
             
             # Gets data from FIFO buffer (quaternion + accelerometer)
-            data_frame = self.module.readfrom_mem(IMUADDRESS, self.registers["fifo"], count)
+            data_frame = self.module.readfrom_mem(IMUADDRESS, FIFO_REG, count)
             self.data = data_frame
             
             self.new_data_available = False
@@ -451,9 +460,7 @@ class MPU6050:
         return data_point
     
     @micropython.native
-    def quat_to_euler(self, qw, qx, qy, qz):
-        deg_to_rad = 180/pi
-        
+    def quat_to_euler(self, qw, qx, qy, qz):        
         # Converts quaternion values from DMP to euler angles that are human-readable via NASA standard sequence (Z-Y-X)
         yaw = atan2(2*(qw*qz + qx*qy), 1-2*(qy*qy+qz*qz))
         roll = atan2(2*(qw*qx + qy*qz), 1-2*(qx*qx + qy*qy))
@@ -467,9 +474,9 @@ class MPU6050:
         
         pitch = asin(arg)
         
-        pitch *= deg_to_rad
-        roll *= deg_to_rad
-        yaw *= deg_to_rad
+        pitch *= DEG_TO_RAD
+        roll *= DEG_TO_RAD
+        yaw *= DEG_TO_RAD
         
         return pitch, roll, yaw
     
