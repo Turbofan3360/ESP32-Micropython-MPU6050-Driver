@@ -263,7 +263,7 @@ class MPU6050:
         self.module.writeto_mem(IMUADDRESS, self.registers["accel_config"], bytearray([0x00]))
         self.module.writeto_mem(IMUADDRESS, self.registers["gyro_config"], bytearray([0x18]))
         
-        self.data = bytearray(42)
+        self.data = bytearray(48)
     
     def log(self, string):
         print(string)
@@ -450,7 +450,7 @@ class MPU6050:
         data_point /= 16384
         data_point *= 9.81
         
-        return round(data_point, 3)
+        return round(data_point, 2)
     
     @micropython.native
     def decode_quat_data(self, data):
