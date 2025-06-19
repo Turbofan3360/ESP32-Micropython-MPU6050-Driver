@@ -1,5 +1,5 @@
 from machine import SoftI2C, Pin
-from math import pi, asin, atan2, sqrt
+from math import asin, atan2, sqrt
 from micropython import const
 import time
 
@@ -9,7 +9,6 @@ class I2CConnectionError(Exception):
 class MPU6050:    
     def __init__(self, scl, sda):
         self.module = SoftI2C(scl=Pin(scl), sda=Pin(sda), freq=400000)
-        IMUADDRESS = const(0x68)
         
         self.registers = {
             "fifo" : 0x74,
@@ -35,7 +34,8 @@ class MPU6050:
             "dmp_firmware_start_2" : 0x71
             }
         
-        FIFO_REG = const(self.registers["fifo"])
+        FIFO_REG = const(0x74)
+        IMUADDRESS = const(0x68)
 
         self.dmp_firmware_v612 = [
             # Bank 0
@@ -248,14 +248,12 @@ class MPU6050:
         self.world_velocity = [0, 0, 0]
         self.first_run_flag = False
         self.new_data_available = False
-        self.calibration_offsets = {
-                                "ac_x" : 0,
-                                "ac_y" : 0,
-                                "ac_z" : 0,
-                                }
-        
-        DEG_TO_RAD = const(180/pi)
-        
+        self.calibration_values = {
+                                    "ac_x" : 0,
+                                    "ac_y" : 0,
+                                    "ac_z" : 0.
+                                    }
+                
         # Wake up MPU6050
         self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt"], bytes([0x80]))
         time.sleep_ms(50)
@@ -373,6 +371,10 @@ class MPU6050:
         while time.time() < end_time:
             self.newdata()
             
+            # Checking if there's actually any data is self.data
+            if self.data == bytearray(len(self.data)):
+                continue
+            
             d_ax += self.decode_acceL_data(self.data[28:30])
             d_ay += self.decode_acceL_data(self.data[32:34])
             d_az += self.decode_acceL_data(self.data[36:38]) - 9.81
@@ -381,9 +383,9 @@ class MPU6050:
         
             time.sleep(0.1)
         
-        self.calibration_offsets["ac_x"] = d_ax/counter
-        self.calibration_offsets["ac_y"] = d_ay/counter
-        self.calibration_offsets["ac_z"] = d_az/counter
+        d_ax /= counter
+        d_ay /= counter
+        d_az /= counter
         self.log("Coarse calibration complete")
         
         tolerance = 0.01
@@ -393,22 +395,22 @@ class MPU6050:
         while ready != 3:
             self.newdata()
             
-            ax = self.decode_acceL_data(self.data[28:30]) + self.calibration_offsets["ac_x"]
-            ay = self.decode_acceL_data(self.data[32:34]) + self.calibration_offsets["ac_y"] 
-            az = self.decode_acceL_data(self.data[36:38]) + self.calibration_offsets["ac_z"]
+            ax = self.decode_acceL_data(self.data[28:30]) + d_ax
+            ay = self.decode_acceL_data(self.data[32:34]) + d_ay
+            az = self.decode_acceL_data(self.data[36:38]) + d_az
             
             ready = 0
             
             if abs(ax) > tolerance:
-                self.calibration_offsets["ac_x"] -= ax/divisor
+                d_ax -= ax/divisor
             else:
                 ready += 1
             if abs(ay) > tolerance:
-                self.calibration_offsets["ac_y"] -= ay/divisor
+                d_ay -= ay/divisor
             else:
                 ready += 1
             if abs(az-9.81) > tolerance:
-                self.calibration_offsets["ac_z"] -= (az-9.81)/divisor
+                d_az -= (az-9.81)/divisor
             else:
                 ready += 1
                                 
@@ -416,9 +418,9 @@ class MPU6050:
         
         self.log("Fine calibration complete")
         
-        DAC_X = const(self.calibration_offsets["ac_x"])
-        DAC_Y = const(self.calibration_offsets["ac_y"])
-        DAC_Z = const(self.calibration_offsets["ac_z"])
+        self.calibration_values["ac_x"] = d_ax
+        self.calibration_values["ac_y"] = d_ay
+        self.calibration_values["ac_z"] = d_az
     
     
     
@@ -474,9 +476,9 @@ class MPU6050:
         
         pitch = asin(arg)
         
-        pitch *= DEG_TO_RAD
-        roll *= DEG_TO_RAD
-        yaw *= DEG_TO_RAD
+        pitch *= 57.2957795
+        roll *= 57.2957795
+        yaw *= 57.2957795
         
         return pitch, roll, yaw
     
@@ -519,9 +521,9 @@ class MPU6050:
         qy = self.decode_quat_data(data[8:12])
         qz = self.decode_quat_data(data[12:16])
         
-        ax = self.decode_accel_data(data[28:30]) + D_ACX
-        ay = self.decode_accel_data(data[32:34]) + D_ACY
-        az = self.decode_accel_data(data[36:38]) + D_ACZ
+        ax = self.decode_accel_data(data[28:30]) + self.calibration_values["ac_x"]
+        ay = self.decode_accel_data(data[32:34]) + self.calibration_values["ac_y"]
+        az = self.decode_accel_data(data[36:38]) + self.calibration_values["ac_z"]
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
