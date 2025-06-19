@@ -370,10 +370,6 @@ class MPU6050:
         while time.time() < end_time:
             self.newdata()
             
-            # Checking if there's actually any data is self.data
-            if self.data == bytearray(len(self.data)):
-                continue
-            
             d_ax += self.decode_accel_data(self.data[28:30])
             d_ay += self.decode_accel_data(self.data[32:34])
             d_az += self.decode_accel_data(self.data[36:38]) - 9.81
@@ -436,6 +432,10 @@ class MPU6050:
             
             # Gets data from FIFO buffer (quaternion + accelerometer)
             data_frame = self.module.readfrom_mem(IMUADDRESS, FIFO_REG, count)
+            
+            if not any(data_frame):
+                return
+            
             self.data = data_frame
             
             self.new_data_available = False
