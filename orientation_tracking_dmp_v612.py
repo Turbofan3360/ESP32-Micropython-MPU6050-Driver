@@ -1,7 +1,6 @@
 from machine import SoftI2C, Pin
 from math import asin, atan2, sqrt
-from micropython import const
-import time
+import time, struct
 
 class I2CConnectionError(Exception):
     pass
@@ -375,9 +374,9 @@ class MPU6050:
             if self.data == bytearray(len(self.data)):
                 continue
             
-            d_ax += self.decode_acceL_data(self.data[28:30])
-            d_ay += self.decode_acceL_data(self.data[32:34])
-            d_az += self.decode_acceL_data(self.data[36:38]) - 9.81
+            d_ax += self.decode_accel_data(self.data[28:30])
+            d_ay += self.decode_accel_data(self.data[32:34])
+            d_az += self.decode_accel_data(self.data[36:38]) - 9.81
             
             counter += 1
         
@@ -395,9 +394,9 @@ class MPU6050:
         while ready != 3:
             self.newdata()
             
-            ax = self.decode_acceL_data(self.data[28:30]) + d_ax
-            ay = self.decode_acceL_data(self.data[32:34]) + d_ay
-            az = self.decode_acceL_data(self.data[36:38]) + d_az
+            ax = self.decode_accel_data(self.data[28:30]) + d_ax
+            ay = self.decode_accel_data(self.data[32:34]) + d_ay
+            az = self.decode_accel_data(self.data[36:38]) + d_az
             
             ready = 0
             
@@ -446,7 +445,7 @@ class MPU6050:
         
     @micropython.native
     def decode_accel_data(self, data):
-        data_point = struct.unpack(">h", data)
+        data_point = struct.unpack(">h", data)[0]
         
         data_point /= 16384
         data_point *= 9.81
@@ -455,7 +454,7 @@ class MPU6050:
     
     @micropython.native
     def decode_quat_data(self, data):
-        data_point = struct.unpack(">l", data)
+        data_point = struct.unpack(">l", data)[0]
             
         data_point /= 1073741824
         
@@ -544,15 +543,15 @@ class MPU6050:
         dt = (time.time_ns() - self.start_time)/1000000000
         self.start_time = time.time_ns()
         
-        self.local_velocity[0] += round(b_ax*dt, 3)
-        self.local_velocity[1] += round(b_ay*dt, 3)
-        self.local_velocity[2] += round(b_az*dt, 3)
+        self.local_velocity[0] += b_ax*dt
+        self.local_velocity[1] += b_ay*dt
+        self.local_velocity[2] += b_az*dt
         
-        self.world_velocity[0] += round(w_ax*dt, 3)
-        self.world_velocity[1] += round(w_ay*dt, 3)
-        self.world_velocity[2] += round(w_az*dt, 3)
+        self.world_velocity[0] += w_ax*dt
+        self.world_velocity[1] += w_ay*dt
+        self.world_velocity[2] += w_az*dt
 
-        return [qw, qx, qy, qz], orientation, ax, ay, az#, self.local_velocity, self.world_velocity
+        return [qw, qx, qy, qz], orientation, self.local_velocity, self.world_velocity
         
 
 module = MPU6050(46, 3)
