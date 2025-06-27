@@ -265,10 +265,10 @@ class MPU6050:
         
         self.data = bytearray(48)
     
-    def log(self, string):
+    def _log(self, string):
         print(string)
     
-    def write_dmp_byte(self, address, memory_offset, byte):
+    def _write_dmp_byte(self, address, memory_offset, byte):
         self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_1"], bytearray([address]))
         self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_2"], bytearray([memory_offset]))
         self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_3"], bytearray([byte]))
@@ -279,23 +279,23 @@ class MPU6050:
         # Setting DLPF to 42Hz (gyros) and 44Hz (accel), and sample rate to 400Hz
         self.module.writeto_mem(IMUADDRESS, self.registers["config"], bytearray([0x03]))
         self.module.writeto_mem(IMUADDRESS, self.registers["smplrt_div"], bytearray([0x04]))
-        self.log("Sample rates and filters set up")
+        self._log("Sample rates and filters set up")
         
         # Setting up FIFO
         self.module.writeto_mem(IMUADDRESS, self.registers["fifo_en"], bytearray([0x00]))
         self.module.writeto_mem(IMUADDRESS, self.registers["user_ctrl"], bytearray([0x04]))
-        self.log("FIFO enabled")
+        self._log("FIFO enabled")
         
         # Setting up DMP interrupts
         self.module.writeto_mem(IMUADDRESS, self.registers["int_enable"], bytearray([0x00]))
         self.module.writeto_mem(IMUADDRESS, self.registers["int_enable"], bytearray([0x02]))
         self.module.writeto_mem(IMUADDRESS, self.registers["int_pin_config"], bytearray([0x90]))
         
-        self.log("Interrupts enabled")
+        self._log("Interrupts enabled")
         
         # Writes the DMP firmware to the DMP in 16-byte blocks
         for bank in range(no_banks):
-            self.log("Loading firmware bank {}".format(bank))
+            self._log("Loading firmware bank {}".format(bank))
             
             # Writing firmware bank
             self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_1"], bytearray([bank]))
@@ -324,55 +324,55 @@ class MPU6050:
             time.sleep(0.01)
         
         # Enabling 6-axis low power quaternion output from DMP
-        self.write_dmp_byte(0xA, 0xA3, 0x20)
-        self.write_dmp_byte(0xA, 0xA4, 0x28)
-        self.write_dmp_byte(0xA, 0xA5, 0x30)
-        self.write_dmp_byte(0xA, 0xA6, 0x30)
+        self._write_dmp_byte(0xA, 0xA3, 0x20)
+        self._write_dmp_byte(0xA, 0xA4, 0x28)
+        self._write_dmp_byte(0xA, 0xA5, 0x30)
+        self._write_dmp_byte(0xA, 0xA6, 0x30)
         
-        self.log("6-axis low power quaternion output enabled")
+        self._log("6-axis low power quaternion output enabled")
         
         # Enabling raw accel/gyro data ouput from DMP into FIFO
-        self.write_dmp_byte(0xA, 0xAB, 0xA3)
-        self.write_dmp_byte(0xA, 0xAC, 0xC0)
-        self.write_dmp_byte(0xA, 0xAD, 0xC8)
-        self.write_dmp_byte(0xA, 0xAE, 0xC2)
-        self.write_dmp_byte(0xA, 0xAF, 0xC4)
-        self.write_dmp_byte(0xA, 0xB0, 0xCC)
-        self.write_dmp_byte(0xA, 0xB1, 0xC6)
-        self.write_dmp_byte(0xA, 0xB2, 0xA3)
-        self.write_dmp_byte(0xA, 0xB3, 0xA3)
-        self.write_dmp_byte(0xA, 0xB4, 0xA3)
+        self._write_dmp_byte(0xA, 0xAB, 0xA3)
+        self._write_dmp_byte(0xA, 0xAC, 0xC0)
+        self._write_dmp_byte(0xA, 0xAD, 0xC8)
+        self._write_dmp_byte(0xA, 0xAE, 0xC2)
+        self._write_dmp_byte(0xA, 0xAF, 0xC4)
+        self._write_dmp_byte(0xA, 0xB0, 0xCC)
+        self._write_dmp_byte(0xA, 0xB1, 0xC6)
+        self._write_dmp_byte(0xA, 0xB2, 0xA3)
+        self._write_dmp_byte(0xA, 0xB3, 0xA3)
+        self._write_dmp_byte(0xA, 0xB4, 0xA3)
         
-        self.log("Accel/gyro raw data ouput to FIFO enabled")
+        self._log("Accel/gyro raw data ouput to FIFO enabled")
         
         # Writing firmware start byte
         self.module.writeto_mem(IMUADDRESS, self.registers["dmp_firmware_start_1"], bytearray([0x04]))
-        self.log("Firmware started")
+        self._log("Firmware started")
         
         # Enable FIFO and DMP, reset FIFO and DMP
         self.module.writeto_mem(IMUADDRESS, self.registers["user_ctrl"], bytearray([0xCC]))
-        self.log("DMP and FIFO actived and reset")
+        self._log("DMP and FIFO actived and reset")
 
         if self.module.readfrom_mem(IMUADDRESS, self.registers["WHO_AM_I"], 1)[0] != 0x68:
             raise I2CConnectionError
         
         # Activate pin-driven interrupts
         self.pin_interrupt = Pin(int_pin, Pin.IN)
-        self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self.updatedata)
-        self.log("Pin-driven interrupts activated")
+        self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self._updatedata)
+        self._log("Pin-driven interrupts activated")
     
     def calibrate(self, length):
         d_ax = d_ay = d_az = counter = ready = 0
         end_time = time.time()+length
         
-        self.log("Calibrating")
+        self._log("Calibrating")
         # Coarse calibration offsets
         while time.time() < end_time:
             self.newdata()
             
-            d_ax += self.decode_accel_data(self.data[28:30])
-            d_ay += self.decode_accel_data(self.data[32:34])
-            d_az += self.decode_accel_data(self.data[36:38]) - 9.81
+            d_ax += self._decode_accel_data(self.data[28:30])
+            d_ay += self._decode_accel_data(self.data[32:34])
+            d_az += self._decode_accel_data(self.data[36:38]) - 9.81
             
             counter += 1
         
@@ -381,7 +381,7 @@ class MPU6050:
         d_ax /= counter
         d_ay /= counter
         d_az /= counter
-        self.log("Coarse calibration complete")
+        self._log("Coarse calibration complete")
         
         tolerance = 0.01
         divisor = 8
@@ -390,9 +390,9 @@ class MPU6050:
         while ready != 3:
             self.newdata()
             
-            ax = self.decode_accel_data(self.data[28:30]) + d_ax
-            ay = self.decode_accel_data(self.data[32:34]) + d_ay
-            az = self.decode_accel_data(self.data[36:38]) + d_az
+            ax = self._decode_accel_data(self.data[28:30]) + d_ax
+            ay = self._decode_accel_data(self.data[32:34]) + d_ay
+            az = self._decode_accel_data(self.data[36:38]) + d_az
             
             ready = 0
             
@@ -411,7 +411,7 @@ class MPU6050:
                                 
             time.sleep(0.01)
         
-        self.log("Fine calibration complete")
+        self._log("Fine calibration complete")
         
         self.calibration_values["ac_x"] = d_ax
         self.calibration_values["ac_y"] = d_ay
@@ -440,11 +440,11 @@ class MPU6050:
             
             self.new_data_available = False
     
-    def updatedata(self, pin=None):
+    def _updatedata(self, pin=None):
         self.new_data_available = True
         
     @micropython.native
-    def decode_accel_data(self, data):
+    def _decode_accel_data(self, data):
         data_point = struct.unpack(">h", data)[0]
         
         data_point /= 16384
@@ -453,7 +453,7 @@ class MPU6050:
         return round(data_point, 2)
     
     @micropython.native
-    def decode_quat_data(self, data):
+    def _decode_quat_data(self, data):
         data_point = struct.unpack(">l", data)[0]
             
         data_point /= 1073741824
@@ -515,14 +515,14 @@ class MPU6050:
         # Extracting quaternion and acceleration data from the data frame and decoding it to ints
         data = self.data
         
-        qw = self.decode_quat_data(data[0:4])
-        qx = self.decode_quat_data(data[4:8])
-        qy = self.decode_quat_data(data[8:12])
-        qz = self.decode_quat_data(data[12:16])
+        qw = self._decode_quat_data(data[0:4])
+        qx = self._decode_quat_data(data[4:8])
+        qy = self._decode_quat_data(data[8:12])
+        qz = self._decode_quat_data(data[12:16])
         
-        ax = self.decode_accel_data(data[28:30]) + self.calibration_values["ac_x"]
-        ay = self.decode_accel_data(data[32:34]) + self.calibration_values["ac_y"]
-        az = self.decode_accel_data(data[36:38]) + self.calibration_values["ac_z"]
+        ax = self._decode_accel_data(data[28:30]) + self.calibration_values["ac_x"]
+        ay = self._decode_accel_data(data[32:34]) + self.calibration_values["ac_y"]
+        az = self._decode_accel_data(data[36:38]) + self.calibration_values["ac_z"]
         
         # Normalize quaternion
         norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
