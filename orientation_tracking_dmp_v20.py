@@ -360,7 +360,8 @@ class MPU6050:
         return data_point
 
     @micropython.native
-    def quat_to_euler(self, qw, qx, qy, qz):        
+    def quat_to_euler(self, q):
+        qw, qx, qy, qz = q
         # Converts quaternion values from DMP to euler angles that are human-readable via NASA standard sequence (Z-Y-X)
         yaw = atan2(2*(qw*qz + qx*qy), 1-2*(qy*qy+qz*qz))
         roll = atan2(2*(qw*qx + qy*qz), 1-2*(qx*qx + qy*qy))
