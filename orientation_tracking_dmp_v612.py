@@ -243,17 +243,6 @@ class MPU6050:
             0xA6, 0xD9, 0x00, 0xD8, 0xF1, 0xFF
             ]
         
-<<<<<<< HEAD
-        self.local_velocity = [0, 0, 0]
-        self.world_velocity = [0, 0, 0]
-        self.first_run_flag = 0
-        self.new_data_available = 0
-        self.calibration_values = {"ac_x" : 0,
-                                   "ac_y" : 0,
-                                   "ac_z" : 0,
-                                   }
-
-=======
         self.first_run_flag = False
         self.new_data_available = False
         self.calibration_values = {
@@ -263,8 +252,7 @@ class MPU6050:
                                     }
         
         time.sleep_ms(50) # Making sure the MPU6050 has had enough time to boot up before you start sending commands
-        
->>>>>>> dev
+
         # Wake up MPU6050
         self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt"], bytes([0x80]))
         time.sleep_ms(50)
@@ -346,12 +334,6 @@ class MPU6050:
         self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self._updatedata)
         self._log("Pin-driven interrupts activated")
     
-    
-    
-    
-    
-    
-    
     def calibrate(self, length):
         d_ax = d_ay = d_az = counter = ready = 0
         end_time = time.time()+length
@@ -408,10 +390,9 @@ class MPU6050:
         self.calibration_values["ac_y"] = d_ay
         self.calibration_values["ac_z"] = d_az
     
-<<<<<<< HEAD
     def updatedata(self, pin=None):
         self.new_data_available = 1
-=======
+
     @micropython.native
     def _newdata(self):
         if self.new_data_available:
@@ -437,7 +418,6 @@ class MPU6050:
     
     def _updatedata(self, pin=None):
         self.new_data_available = True
->>>>>>> dev
         
     @micropython.native
     def _decode_accel_data(self, data):
@@ -544,26 +524,8 @@ class MPU6050:
                 
         local_accel = self._body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
         world_accel = self._world_frame_acceleration(local_accel[0], local_accel[1], local_accel[2], qw, qx, qy, qz)
-        
-<<<<<<< HEAD
-            orientation = self.quat_to_euler(qw, qx, qy, qz)
-        
-        body_acceleration = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
-        world_acceleration = self.world_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
-      
-        dt = (time.time_ns() - self.start_time)*(1e-9)
-        self.start_time = time.time_ns()
-        
-        self.local_velocity[0] += body_acceleration[0]*dt
-        self.local_velocity[1] += body_acceleration[1]*dt
-        self.local_velocity[2] += body_acceleration[2]*dt
-        
-        self.world_velocity[0] += world_acceleration[0]*dt
-        self.world_velocity[1] += world_acceleration[1]*dt
-        self.world_velocity[2] += world_acceleration[2]*dt
-=======
+
         return [qw, qx, qy, qz], local_accel, world_accel
->>>>>>> dev
 
 if __name__ == "__main__":
     module = MPU6050(46, 3)
