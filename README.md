@@ -17,7 +17,7 @@ module.calibrate(10) # The length of time, in seconds, that the code runs raw ca
 
 quaternion, local_accel, world_accel = module.imutrack() # Quaternion in [qw, qx, qy, qz] format, accel in format [ax, ay, az]
 
-euler_angles = module.quat_to_euler
+euler_angles = module.quat_to_euler(quaternion)
 ```
 
 ### References: ###
