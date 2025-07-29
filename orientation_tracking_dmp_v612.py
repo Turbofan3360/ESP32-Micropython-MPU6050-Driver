@@ -1,6 +1,6 @@
 from machine import SoftI2C, Pin
-from math import pi, asin, atan2, sqrt
-import time
+from math import asin, atan2
+import time, struct
 
 class I2CConnectionError(Exception):
     pass
@@ -8,16 +8,12 @@ class I2CConnectionError(Exception):
 class MPU6050:    
     def __init__(self, scl, sda):
         self.module = SoftI2C(scl=Pin(scl), sda=Pin(sda), freq=400000)
-        self.imuaddress = 0x68
         
         self.registers = {
-            "accel" : 0x3B,
-            "gyro" : 0x43,
-            "temperature" : 0x41,
-            "accel_config" : 0x1C,
-            "gyro_config" : 0x1B,
             "fifo" : 0x74,
             
+            "accel_config" : 0x1C,
+            "gyro_config" : 0x1B,
             "pwr_mgmnt" : 0x6B,
             "pwr_mgmnt_2" : 0x6C,
             "config" : 0x1A,
@@ -36,6 +32,9 @@ class MPU6050:
             "dmp_firmware_start_1" : 0x70,
             "dmp_firmware_start_2" : 0x71
             }
+        
+        FIFO_REG = const(0x74)
+        IMUADDRESS = const(0x68)
 
         self.dmp_firmware_v612 = [
             # Bank 0
@@ -244,6 +243,7 @@ class MPU6050:
             0xA6, 0xD9, 0x00, 0xD8, 0xF1, 0xFF
             ]
         
+<<<<<<< HEAD
         self.local_velocity = [0, 0, 0]
         self.world_velocity = [0, 0, 0]
         self.first_run_flag = 0
@@ -253,49 +253,59 @@ class MPU6050:
                                    "ac_z" : 0,
                                    }
 
+=======
+        self.first_run_flag = False
+        self.new_data_available = False
+        self.calibration_values = {
+                                    "ac_x" : 0,
+                                    "ac_y" : 0,
+                                    "ac_z" : 0.
+                                    }
+        
+        time.sleep_ms(50) # Making sure the MPU6050 has had enough time to boot up before you start sending commands
+        
+>>>>>>> dev
         # Wake up MPU6050
-        self.module.writeto_mem(self.imuaddress, self.registers["pwr_mgmnt"], bytes([0x80]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt"], bytes([0x80]))
         time.sleep_ms(50)
-        self.module.writeto_mem(self.imuaddress, self.registers["pwr_mgmnt"], bytes([0x00]))
-        self.module.writeto_mem(self.imuaddress, self.registers["pwr_mgmnt_2"], bytes([0x00]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt"], bytes([0x00]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt_2"], bytes([0x00]))
         
         # Setting required accelerometer/gyro scalars (2g for the accelerometer, 2000deg/s for gyro)
-        self.module.writeto_mem(self.imuaddress, self.registers["accel_config"], bytearray([0x00]))
-        self.module.writeto_mem(self.imuaddress, self.registers["gyro_config"], bytearray([0x18]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["accel_config"], bytearray([0x00]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["gyro_config"], bytearray([0x18]))
         
-        self.data = bytearray(22)
+        self.data = bytearray(28)
     
-    def log(self, string):
+    def _log(self, string):
         print(string)
     
-    def write_dmp_byte(self, address, memory_offset, byte):
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_1"], bytearray([address]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([memory_offset]))
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_3"], bytearray([byte]))
-        
     def dmpsetup(self, int_pin):
         no_banks = 12
         
-        # Setting DLPF to 42Hz (gyros) and 44Hz (accel), and sample rate to 400Hz
-        self.module.writeto_mem(self.imuaddress, self.registers["config"], bytearray([0x03]))
-        self.module.writeto_mem(self.imuaddress, self.registers["smplrt_div"], bytearray([0x04]))
-        self.log("Sample rates and filters set up")
+        # Setting DLPF to 42Hz (gyros) and 44Hz (accel), and sample rate to 200Hz
+        self.module.writeto_mem(IMUADDRESS, self.registers["config"], bytearray([0x03]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["smplrt_div"], bytearray([0x04]))
+        self._log("Sample rates and filters set up")
         
         # Setting up FIFO
-        self.module.writeto_mem(self.imuaddress, self.registers["fifo_en"], bytearray([0x00]))
-        self.module.writeto_mem(self.imuaddress, self.registers["user_ctrl"], bytearray([0x04]))
-        self.log("FIFO enabled")
+        self.module.writeto_mem(IMUADDRESS, self.registers["fifo_en"], bytearray([0x00]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["user_ctrl"], bytearray([0x04]))
+        self._log("FIFO enabled")
         
         # Setting up DMP interrupts
-        self.module.writeto_mem(self.imuaddress, self.registers["int_enable"], bytearray([0x00]))
-        self.module.writeto_mem(self.imuaddress, self.registers["int_enable"], bytearray([0x02]))
-        self.module.writeto_mem(self.imuaddress, self.registers["int_pin_config"], bytearray([0x90]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["int_enable"], bytearray([0x00]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["int_enable"], bytearray([0x02]))
+        self.module.writeto_mem(IMUADDRESS, self.registers["int_pin_config"], bytearray([0x90]))
         
-        self.log("Interrupts enabled")
+        self._log("Interrupts enabled")
         
         # Writes the DMP firmware to the DMP in 16-byte blocks
         for bank in range(no_banks):
-            self.log("Loading firmware bank {}".format(bank))
+            self._log("Loading firmware bank {}".format(bank))
+            
+            # Writing firmware bank
+            self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_1"], bytearray([bank]))
             
             byte_offset = 0
 
@@ -308,54 +318,33 @@ class MPU6050:
                     firmware_byte = self.dmp_firmware_v612[bank*256+byte_offset]
                     
                     # Writing the firmware byte
-                    self.write_dmp_byte(bank, byte_offset, firmware_byte)
+                    self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
+                    self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_3"], bytearray([firmware_byte]))
                     
                     # Setting the byte we want to read back, and then reading it back to check
-                    self.module.writeto_mem(self.imuaddress, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
-                    byte = self.module.readfrom_mem(self.imuaddress, self.registers["dmp_ctrl_3"], 1)[0]
+                    self.module.writeto_mem(IMUADDRESS, self.registers["dmp_ctrl_2"], bytearray([byte_offset]))
+                    byte = self.module.readfrom_mem(IMUADDRESS, self.registers["dmp_ctrl_3"], 1)[0]
                     
                     if byte == firmware_byte:
                         byte_offset += 1
             
             time.sleep(0.01)
         
-        # Enabling 6-axis low power quaternion output from DMP
-        self.write_dmp_byte(0xA, 0xA3, 0x20)
-        self.write_dmp_byte(0xA, 0xA4, 0x28)
-        self.write_dmp_byte(0xA, 0xA5, 0x30)
-        self.write_dmp_byte(0xA, 0xA6, 0x30)
-        
-        self.log("6-axis low power quaternion output enabled")
-        
-        # Enabling raw accel/gyro data ouput from DMP into FIFO
-        self.write_dmp_byte(0xA, 0xAB, 0xA3)
-        self.write_dmp_byte(0xA, 0xAC, 0xC0)
-        self.write_dmp_byte(0xA, 0xAD, 0xC8)
-        self.write_dmp_byte(0xA, 0xAE, 0xC2)
-        self.write_dmp_byte(0xA, 0xAF, 0xC4)
-        self.write_dmp_byte(0xA, 0xB0, 0xCC)
-        self.write_dmp_byte(0xA, 0xB1, 0xC6)
-        self.write_dmp_byte(0xA, 0xB2, 0xA3)
-        self.write_dmp_byte(0xA, 0xB3, 0xA3)
-        self.write_dmp_byte(0xA, 0xB4, 0xA3)
-        
-        self.log("Accel/gyro raw data ouput to FIFO enabled")
-        
         # Writing firmware start byte
-        self.module.writeto_mem(self.imuaddress, self.registers["dmp_firmware_start_1"], bytearray([0x04]))
-        self.log("Firmware started")
+        self.module.writeto_mem(IMUADDRESS, self.registers["dmp_firmware_start_1"], bytearray([0x04]))
+        self._log("Firmware started")
         
         # Enable FIFO and DMP, reset FIFO and DMP
-        self.module.writeto_mem(self.imuaddress, self.registers["user_ctrl"], bytearray([0xCC]))
-        self.log("DMP and FIFO actived and reset")
+        self.module.writeto_mem(IMUADDRESS, self.registers["user_ctrl"], bytearray([0xCC]))
+        self._log("DMP and FIFO actived and reset")
 
-        if self.module.readfrom_mem(self.imuaddress, self.registers["WHO_AM_I"], 1)[0] != 0x68:
+        if self.module.readfrom_mem(IMUADDRESS, self.registers["WHO_AM_I"], 1)[0] != 0x68:
             raise I2CConnectionError
         
         # Activate pin-driven interrupts
         self.pin_interrupt = Pin(int_pin, Pin.IN)
-        self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self.updatedata)
-        self.log("Pin-driven interrupts activated")
+        self.pin_interrupt.irq(trigger=Pin.IRQ_FALLING, handler=self._updatedata)
+        self._log("Pin-driven interrupts activated")
     
     
     
@@ -367,63 +356,92 @@ class MPU6050:
         d_ax = d_ay = d_az = counter = ready = 0
         end_time = time.time()+length
         
-        self.log("Calibrating")
+        self._log("Calibrating")
         # Coarse calibration offsets
         while time.time() < end_time:
-            data = self.module.readfrom_mem(self.imuaddress, self.registers["accel"], 14)
+            self._newdata()
             
-            d_ax += self.decode_accel_data(data[0:2])
-            d_ay += self.decode_accel_data(data[2:4])
-            d_az += self.decode_accel_data(data[4:6]) - 9.81
+            d_ax += self._decode_accel_data(self.data[16:18])
+            d_ay += self._decode_accel_data(self.data[18:20])
+            d_az += self._decode_accel_data(self.data[20:22]) - 9.81
             
             counter += 1
-            
+        
             time.sleep(0.1)
         
-        self.calibration_values["ac_x"] = d_ax/counter
-        self.calibration_values["ac_y"] = d_ay/counter
-        self.calibration_values["ac_z"] = d_az/counter
-        self.log("Coarse calibration complete")
+        d_ax /= counter
+        d_ay /= counter
+        d_az /= counter
+        self._log("Coarse calibration complete")
         
         tolerance = 0.005
         divisor = 8
         
         # Fine tuning the calibration offsets        
         while ready != 3:
-            data = self.module.readfrom_mem(self.imuaddress, self.registers["accel"], 14)
+            self._newdata()
             
-            ax = self.decode_accel_data(data[0:2]) + self.calibration_values["ac_x"]
-            ay = self.decode_accel_data(data[2:4]) + self.calibration_values["ac_y"] 
-            az = self.decode_accel_data(data[4:6]) + self.calibration_values["ac_z"]
+            ax = self._decode_accel_data(self.data[16:18]) + d_ax
+            ay = self._decode_accel_data(self.data[18:20]) + d_ay
+            az = self._decode_accel_data(self.data[20:22]) + d_az
             
             ready = 0
             
             if abs(ax) > tolerance:
-                self.calibration_values["ac_x"] -= ax/divisor
+                d_ax -= ax/divisor
             else:
                 ready += 1
             if abs(ay) > tolerance:
-                self.calibration_values["ac_y"] -= ay/divisor
+                d_ay -= ay/divisor
             else:
                 ready += 1
-                            
             if abs(az-9.81) > tolerance:
-                self.calibration_values["ac_z"] -= (az-9.81)/divisor
+                d_az -= (az-9.81)/divisor
             else:
                 ready += 1
-                
+                                
             time.sleep(0.01)
         
-        self.log("Fine calibration complete")
+        self._log("Fine calibration complete")
+        
+        self.calibration_values["ac_x"] = d_ax
+        self.calibration_values["ac_y"] = d_ay
+        self.calibration_values["ac_z"] = d_az
     
+<<<<<<< HEAD
     def updatedata(self, pin=None):
         self.new_data_available = 1
+=======
+    @micropython.native
+    def _newdata(self):
+        if self.new_data_available:
+            if self.module.readfrom_mem(IMUADDRESS, 0x3A, 1)[0] & 0x10: # Checking to see if FIFO overflow flag is set to 1
+                register = self.module.readfrom_mem(IMUADDRESS, 0x6A, 1)[0]
+                self.module.writeto_mem(IMUADDRESS, 0x6A, bytes([register|0x04])) # Resetting FIFO buffer without touching anything else
+                time.sleep_ms(5) # Letting a new packet enter the FIFO: 200Hz update rate -> 5ms per data frame
+            
+            # Finding how many bytes there are in the FIFO
+            count_h = self.module.readfrom_mem(IMUADDRESS, 0x72, 1)[0]
+            count_l = self.module.readfrom_mem(IMUADDRESS, 0x73, 1)[0]
+            count = (count_h << 8) | count_l
+            
+            # Gets data from FIFO buffer (quaternion + accelerometer)
+            data_frame = self.module.readfrom_mem(IMUADDRESS, FIFO_REG, count)
+            
+            if len(data_frame) < 28:
+                return None
+            
+            self.data = data_frame
+            
+            self.new_data_available = False
+    
+    def _updatedata(self, pin=None):
+        self.new_data_available = True
+>>>>>>> dev
         
     @micropython.native
-    def decode_accel_data(self, data):
-        data_point = int.from_bytes(data, "big")
-        if data_point >= 32768:
-            data_point -= 65536
+    def _decode_accel_data(self, data):
+        data_point = struct.unpack(">h", data)[0]
         
         data_point /= 16384
         data_point *= 9.81
@@ -431,19 +449,15 @@ class MPU6050:
         return data_point
     
     @micropython.native
-    def decode_quat_data(self, data):
-        data_point = int.from_bytes(data, "big")
-        if data_point >= 2147483648:
-            data_point -= 4294967296
+    def _decode_quat_data(self, data):
+        data_point = struct.unpack(">l", data)[0]
             
         data_point /= 1073741824
         
         return data_point
     
     @micropython.native
-    def quat_to_euler(self, qw, qx, qy, qz):
-        deg_to_rad = 180/pi
-        
+    def quat_to_euler(self, qw, qx, qy, qz):        
         # Converts quaternion values from DMP to euler angles that are human-readable via NASA standard sequence (Z-Y-X)
         yaw = atan2(2*(qw*qz + qx*qy), 1-2*(qy*qy+qz*qz))
         roll = atan2(2*(qw*qx + qy*qz), 1-2*(qx*qx + qy*qy))
@@ -457,14 +471,14 @@ class MPU6050:
         
         pitch = asin(arg)
         
-        pitch *= deg_to_rad
-        roll *= deg_to_rad
-        yaw *= deg_to_rad
+        pitch *= 57.2957795 # approx. 180/pi
+        roll *= 57.2957795
+        yaw *= 57.2957795
         
         return pitch, roll, yaw
     
     @micropython.native
-    def body_frame_acceleration(self, ax, ay, az, qw, qx, qy, qz):
+    def _body_frame_acceleration(self, ax, ay, az, qw, qx, qy, qz):
         # Rotate gravity vector into body's reference frame to subract gravity from accelerometer readings. Gives acceleration in body's reference frame
          gx = 19.62*(qx*qz + qw*qy)
          gy = 19.62*(qy*qz - qw*qx)
@@ -477,16 +491,20 @@ class MPU6050:
          return ax, ay, az
     
     @micropython.native
-    def world_frame_acceleration(self, ax, ay, az, qw, qx, qy, qz):
+    def _world_frame_acceleration(self, ax, ay, az, qw, qx, qy, qz):
         # Rotate acceleration vector into world reference frame, then subtract gravity from it. Gives acceleration in world reference frame
         w_ax = (qw*qw + qx*qx - qy*qy - qz*qz)*ax + 2*(qx*qy - qw*qz)*ay + 2*(qx*qz + qw*qy)*az
         w_ay = 2*(qx*qy + qw*qz)*ax + (qw*qw - qx*qx + qy*qy - qz*qz)*ay + 2*(qy*qz - qw*qx)*az
         w_az = 2*(qx*qz - qw*qy)*ax + 2*(qy*qz + qw*qx)*ay + (qw*qw - qx*qx - qy*qy + qz*qz)*az
         
-        # Removing gravity
-        w_az -= 9.81
-        
         return w_ax, w_ay, w_az
+    
+    @micropython.native
+    def _fastround(self, number): # Quick way of rounding POSITIVE floats to 2.d.p
+        number *=100
+        rounded = int(number+0.5)
+        
+        return rounded/100
     
     @micropython.native
     def imutrack(self):
@@ -495,34 +513,26 @@ class MPU6050:
             self.start_time = time.time_ns()
             self.first_run_flag = 1
 
-        # Checking if there's new data in the FIFO buffer
-        if self.new_data_available:
-            # Finding how many bytes there are in the FIFO
-            count_h = self.module.readfrom_mem(self.imuaddress, 0x72, 1)[0]
-            count_l = self.module.readfrom_mem(self.imuaddress, 0x73, 1)[0]
-            count = (count_h << 8) | count_l
-            
-            if count >= 22:
-                # Gets data from FIFO buffer (quaternion + accelerometer)
-                data_frame = self.module.readfrom_mem(self.imuaddress, self.registers["fifo"], count)
-                self.data = data_frame
-            
-            self.new_data_available = 0
+        self._newdata()
         
         # Extracting quaternion and acceleration data from the data frame and decoding it to ints
         data = self.data[0:22]
         
-        qw = self.decode_quat_data(data[0:4])
-        qx = self.decode_quat_data(data[4:8])
-        qy = self.decode_quat_data(data[8:12])
-        qz = self.decode_quat_data(data[12:16])
+        qw = self._decode_quat_data(data[0:4])
+        qx = self._decode_quat_data(data[4:8])
+        qy = self._decode_quat_data(data[8:12])
+        qz = self._decode_quat_data(data[12:16])
         
-        ax = self.decode_accel_data(data[16:18]) + self.calibration_values["ac_x"]
-        ay = self.decode_accel_data(data[18:20]) + self.calibration_values["ac_y"]
-        az = self.decode_accel_data(data[20:22]) + self.calibration_values["ac_z"]
+        ax = self._decode_accel_data(data[16:18]) + self.calibration_values["ac_x"]
+        ay = self._decode_accel_data(data[18:20]) + self.calibration_values["ac_y"]
+        az = self._decode_accel_data(data[20:22]) + self.calibration_values["ac_z"]
+        
+        ax = self._fastround(ax)
+        ay = self._fastround(ay)
+        az = self._fastround(az)
         
         # Normalize quaternion
-        norm = sqrt(qw*qw + qx*qx + qy*qy + qz*qz)
+        norm = (qw*qw + qx*qx + qy*qy + qz*qz)**0.5
         
         if norm == 0:
             orientation = [0, 0, 0]
@@ -531,7 +541,11 @@ class MPU6050:
             qx /= norm
             qy /= norm
             qz /= norm
+                
+        local_accel = self._body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
+        world_accel = self._world_frame_acceleration(local_accel[0], local_accel[1], local_accel[2], qw, qx, qy, qz)
         
+<<<<<<< HEAD
             orientation = self.quat_to_euler(qw, qx, qy, qz)
         
         body_acceleration = self.body_frame_acceleration(ax, ay, az, qw, qx, qy, qz)
@@ -547,12 +561,15 @@ class MPU6050:
         self.world_velocity[0] += world_acceleration[0]*dt
         self.world_velocity[1] += world_acceleration[1]*dt
         self.world_velocity[2] += world_acceleration[2]*dt
+=======
+        return [qw, qx, qy, qz], local_accel, world_accel
+>>>>>>> dev
 
-        return [qw, qx, qy, qz], orientation, self.local_velocity, self.world_velocity
-        
-
-module = MPU6050(46, 3)
-module.calibrate(10)
-module.dmpsetup(1)
-while True:
-    print(module.imutrack())
+if __name__ == "__main__":
+    module = MPU6050(46, 3)
+    module.dmpsetup(1)
+    module.calibrate(10)
+    
+    while True:
+        print(module.imutrack())
+        time.sleep(0.01)
