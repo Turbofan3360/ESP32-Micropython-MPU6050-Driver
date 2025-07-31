@@ -440,7 +440,7 @@ class MPU6050:
         norm = (qw*qw + qx*qx + qy*qy + qz*qz)**0.5
         
         if norm == 0:
-            orientation = [0, 0, 0]
+            qw, qx, qy, qz = 1, 0, 0, 0
         else:
             qw /= norm
             qx /= norm
