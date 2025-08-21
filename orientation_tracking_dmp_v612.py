@@ -265,7 +265,8 @@ class MPU6050:
                                     "ac_z" : 0.
                                     }
         
-        time.sleep_ms(50) # Making sure the MPU6050 has had enough time to boot up before you start sending commands
+        # Making sure the MPU6050 has had enough time to boot up before you start sending commands
+        time.sleep_ms(50)
 
         # Wake up MPU6050
         self.module.writeto_mem(IMUADDRESS, self.registers["pwr_mgmnt"], bytes([0x80]))
@@ -308,7 +309,7 @@ class MPU6050:
         
         self._log("Interrupts enabled")
         
-        # Writes the DMP firmware to the DMP in 16-byte blocks
+        # Writes the DMP firmware to the DMP in 1-byte blocks
         for bank in range(no_banks):
             self._log("Loading firmware bank {}".format(bank))
             
@@ -419,10 +420,13 @@ class MPU6050:
     @micropython.native
     def _newdata(self):
         if self.new_data_available:
-            if self.module.readfrom_mem(IMUADDRESS, 0x3A, 1)[0] & 0x10: # Checking to see if FIFO overflow flag is set to 1
+            # Checking to see if FIFO overflow flag is set to 1
+            if self.module.readfrom_mem(IMUADDRESS, 0x3A, 1)[0] & 0x10:
                 register = self.module.readfrom_mem(IMUADDRESS, 0x6A, 1)[0]
-                self.module.writeto_mem(IMUADDRESS, 0x6A, bytes([register|0x04])) # Resetting FIFO buffer without touching anything else
-                time.sleep_ms(5) # Letting a new packet enter the FIFO: 200Hz update rate -> 5ms per data frame
+                # Resetting FIFO buffer without touching anything else
+                self.module.writeto_mem(IMUADDRESS, 0x6A, bytes([register|0x04]))
+                # Letting a new packet enter the FIFO: 200Hz update rate -> 5ms per data frame
+                time.sleep_ms(5)
             
             # Finding how many bytes there are in the FIFO
             count_h = self.module.readfrom_mem(IMUADDRESS, 0x72, 1)[0]
@@ -503,7 +507,7 @@ class MPU6050:
     
     @micropython.native
     def _world_frame_acceleration(self, ax, ay, az, qw, qx, qy, qz):
-        # Rotate acceleration vector into world reference frame, then subtract gravity from it. Gives acceleration in world reference frame
+        # Rotate acceleration vector into world reference frame. Gives acceleration in world reference frame
         w_ax = (qw*qw + qx*qx - qy*qy - qz*qz)*ax + 2*(qx*qy - qw*qz)*ay + 2*(qx*qz + qw*qy)*az
         w_ay = 2*(qx*qy + qw*qz)*ax + (qw*qw - qx*qx + qy*qy - qz*qz)*ay + 2*(qy*qz - qw*qx)*az
         w_az = 2*(qx*qz - qw*qy)*ax + 2*(qy*qz + qw*qx)*ay + (qw*qw - qx*qx - qy*qy + qz*qz)*az
