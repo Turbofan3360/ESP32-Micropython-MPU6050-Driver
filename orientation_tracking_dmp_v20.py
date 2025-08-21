@@ -7,6 +7,20 @@ class I2CConnectionError(Exception):
 
 class MPU6050:
     def __init__(self, scl, sda):
+        """
+        Micropython driver for an MPU6050 6-axis IMU on an ESP32.
+        
+        This driver utilises the MPU6050's built-in DMP processor to process the module's orientation, while also providing gravity-free x, y and z acceleration values in both the world and local reference frames.
+        This code also provides methods to calibrate the accelerometer values.
+        
+        Potential methods:
+         - dmp_setup(interrupt_pin): This sets up the IMU's DMP. Required parameters are the ESP32 pin number that is connected to the MPU6050's INT pin.
+         - calibrate(length): This calibrates the module's accelerometers. Requires the module to be flat. Required parameters are the number of seconds the code will do coarse calibration for.
+         - quat_to_euler(quaternion): This provides a utility to convert the quaternion orientation into Euler angles. Required parameters are the quaternion [qw, qx, qy, qz], output is [pitch, roll, yaw]
+         - imutrack(): Gets data from the module and processes it. Returns quaternion orientation, local acceleration and world acceleration (gravity subtracted)
+              - i.e. returns [qw, qx, qy, qz], [lax, lay, laz], [wax, way, waz]
+        """
+        
         self.module = SoftI2C(scl=Pin(scl), sda=Pin(sda), freq=400000)
         
         self.registers = {
@@ -194,6 +208,12 @@ class MPU6050:
         print(string)
                 
     def dmpsetup(self, int_pin):
+        """
+        Method to set up the MPU6050's internal DMP processor. Prints out various statements so you can see progress.
+        
+        Required parameters: ESP32 pin number that is connected to the MPU6050's INT pin
+        """
+        
         no_banks = 8
         
         # Setting DLPF to 42Hz (gyros) and 44Hz (accel), and sample rate to 400Hz
@@ -260,6 +280,12 @@ class MPU6050:
         self._log("Pin-driven interrupts activated")
     
     def calibrate(self, length):
+        """
+        Calibrates the MPU6050's accelerometers (calibration values stored locally, not stored on IMU chip). IMU should be flat and level when calibrating.
+        
+        Parameters: length of time (seconds) that coarse calibration is carried out for. Fine calibration has no time option.
+        """
+        
         d_ax = d_ay = d_az = counter = ready = 0
         end_time = time.time()+length
         
@@ -361,6 +387,13 @@ class MPU6050:
 
     @micropython.native
     def quat_to_euler(self, q):
+        """
+        Utility to convert from quaternion orientation to Euler angles. Uses aerospace/NASA standard conversion sequence - Z-Y-X.
+        
+        Required parameters: quaternion in format [qw, qx, qy, qz]
+        Outputs: [pitch, roll, yaw] - all in degrees.
+        """
+        
         qw, qx, qy, qz = q
         # Converts quaternion values from DMP to euler angles that are human-readable via NASA standard sequence (Z-Y-X)
         yaw = atan2(2*(qw*qz + qx*qy), 1-2*(qy*qy+qz*qz))
@@ -413,6 +446,12 @@ class MPU6050:
     
     @micropython.native
     def imutrack(self):
+        """
+        Gets and processes data from the IMU. Returns the quaternion orientation of the IMU, as well as gravity-subtracted local-frame acceleration and world-frame acceleration values.
+        
+        Ouputs: [qw, qx, qy, qz], [lax, lay, laz], [wax, way, waz]
+        """
+        
         # Initialise self.start_time only on the first execution of this method
         if not self.first_run_flag:
             self.start_time = time.time_ns()
