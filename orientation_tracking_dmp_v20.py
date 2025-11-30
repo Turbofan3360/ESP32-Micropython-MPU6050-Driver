@@ -27,6 +27,7 @@ class MPU6050:
             "accel_config" : 0x1C,
             "gyro_config" : 0x1B,
             "fifo" : 0x74,
+            "accelerometers" : 0x3B,
             
             "pwr_mgmnt" : 0x6B,
             "pwr_mgmnt_2" : 0x6C,
@@ -48,6 +49,7 @@ class MPU6050:
             }
         
         FIFO_REG = const(0x74)
+        ACCELEROMETERS = const(0x3B)
         IMUADDRESS = const(0x68)
 
         self.dmp_firmware_v20 = [
@@ -344,26 +346,24 @@ class MPU6050:
     @micropython.native
     def _newdata(self):
         if self.new_data_available:
-            # Checking to see if FIFO overflow flag is set to 1
+            # Checking for FIFO overflow flag; if set then reset the FIFO
             if self.module.readfrom_mem(IMUADDRESS, 0x3A, 1)[0] & 0x10:
                 register = self.module.readfrom_mem(IMUADDRESS, 0x6A, 1)[0]
-                # Resetting FIFO buffer without touching anything else
                 self.module.writeto_mem(IMUADDRESS, 0x6A, bytes([register|0x04]))
-                time.sleep_ms(5) # Letting a new packet enter the FIFO: 200Hz update rate -> 5ms per data frame
-            
-            # Finding how many bytes there are in the FIFO
+                # Waiting for new FIFO packet: 200Hz update -> 5ms/packet
+                time.sleep_ms(5)
+            # No. bytes in FIFO
             count_h = self.module.readfrom_mem(IMUADDRESS, 0x72, 1)[0]
             count_l = self.module.readfrom_mem(IMUADDRESS, 0x73, 1)[0]
             count = (count_h << 8) | count_l
             
-            # Gets data from FIFO buffer (quaternion + accelerometer)
             data_frame = self.module.readfrom_mem(IMUADDRESS, FIFO_REG, count)
+            accelerometer = self.module.readfrom_mem(IMUADDRESS, ACCELEROMETERS, 6)
             
             if len(data_frame) < 28:
                 return None
             
-            self.data = data_frame
-            
+            self.data = data_frame[:16] + accelerometer
             self.new_data_available = False
     
     @micropython.native
