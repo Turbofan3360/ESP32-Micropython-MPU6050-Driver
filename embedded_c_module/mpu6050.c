@@ -287,3 +287,131 @@ static void log_func(const char* log_string){
     */
     mp_printf(&mp_plat_print, "%s", log_string);
 }
+
+static void mparray_to_float(mp_obj_t array, float* output){
+    /**
+     * Converts from micropython array to an array of C floats
+     * Only gets 4 items as this is used to convert the quaternion orientation [qw, qx, qy, qz] into C floats
+    */
+    size_t len;
+    mp_obj_t *items;
+    int i;
+
+    mp_obj_get_array(array, &len, &items);
+
+    if (len != 4){
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Expected 4 values in list/tuple"));
+    }
+
+    for (i=0; i < len; i++){
+        output[i] = mp_obj_get_float(items[i]);
+    }
+}
+
+static mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
+    /**
+     * Utility to convert from quaternion to Euler angles (degr)ees)
+     * Uses aerospace/NASA standard conversion sequence - Z-Y-X
+    */
+    mpu6050_obj_t* self = MP_OBJ_TO_PTR(self_in);
+    float quat[4], pitch, yaw, roll, arg;
+
+    // Extracting quaternion
+    mparray_to_float(quat_mp, quat);
+
+    // Converting yaw/roll values
+    yaw = atan2f(2*(quat[0]*quat[3] + quat[1]*quat[2]), 1-2*(quat[2]*quat[2]+quat[3]*quat[3]))*RAD_TO_DEG;
+    roll = atan2f(2*(quat[0]*quat[1] + quat[2]*quat[3]), 1-2*(quat[1]*quat[1] + quat[2]*quat[2]))*RAD_TO_DEG;
+
+    // Converting pitch values
+    arg = 2*(quat[0]*quat[2] - quat[1]*quat[3]);
+
+    // Bounding the value
+    if (arg > 1.0f){
+        arg = 1.0f;
+    }
+    else if (arg < -1.0f){
+        arg = -1.0f;
+    }
+
+    pitch = asinf(arg);
+
+    // Creating a micropython list to return
+    mp_obj_t euler[3];
+
+    euler[0] = mp_obj_new_float(pitch);
+    euler[1] = mp_obj_new_float(roll);
+    euler[2] = mp_obj_new_float(yaw);
+
+    return mp_obj_new_list(3, euler);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_quat_to_euler_obj, quat_to_euler);
+
+mp_obj_t local_accel_get_world_accel(mp_obj_t self_in, mp_obj_t l_accel_mp, mp_obj_t quat_mp){
+    /**
+     * Converts acceleration in a local reference frame to a world reference frame using the quaternion orientation
+    */
+    float quat[4], l_accel[3], w_accel[3];
+
+    // Extracting data arrays
+    mparray_to_float(quat_mp, &quat);
+    mparray_to_float(l_accel_mp, &l_accel);
+
+    // Quaternion maths
+    w_accel[0] = (quat[0]*quat[0]+quat[1]*quat[1]-quat[2]*quat[2]-quat[3]*quat[3])*l_accel[0] + 2*(quat[1]*quat[2]-quat[0]*quat[3])*l_accel[1] + 2*(quat[1]*quat[3]+quat[0]*quat[2])*l_accel[2];
+    w_accel[1] = 2*(quat[1]*quat[2]+quat[0]*quat[3])*l_accel[0] + (quat[0]*quat[0]-quat[1]*quat[1]+quat[2]*quat[2]-quat[3]*quat[3])*l_accel[1] + 2*(quat[2]*quat[3]-quat[0]*quat[1])*l_accel[2];
+    w_accel[2] = 2*(quat[1]*quat[3]-quat[0]*quat[2])*l_accel[0] + 2*(quat[2]*quat[3]+quat[0]*quat[1])*l_accel[1] + (quat[0]*quat[0]-quat[1]*quat[1]-quat[2]*quat[2]+quat[3]*quat[3])*l_accel[2];
+
+    // Creating micropython list to return
+    mp_obj_t ret_accel[3];
+
+    ret_accel[0] = mp_obj_new_float(w_accel[0]);
+    ret_accel[1] = mp_obj_new_float(w_accel[1]);
+    ret_accel[2] = mp_obj_new_float(w_accel[2]);
+
+    return mp_obj_new_list(3, ret_accel);
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(mpu6050_lac_wac_obj, local_accel_get_world_accel);
+
+mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time){}
+static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_cal_obj, calibrate);
+
+mp_obj_t get_data(mp_obj_t self_in){}
+static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_getdata_obj, get_data);
+
+/**
+ * Code here exposes the module functions above to micropython as an object
+*/
+
+// Defining the functions that are exposed to micropython
+static const mp_rom_map_elem_t mpu6050_locals_dict_table[] = {
+    {MP_ROM_QSTR(MP_QSTR_quat_to_euler), MP_ROM_PTR(&mpu6050_quat_to_euler_obj)},
+    {MP_ROM_QSTR(MP_QSTR_local_to_world_accel), MP_ROM_PTR(&mpu6050_lac_wac_obj)},
+    {MP_ROM_QSTR(MP_QSTR_calibrate), MP_ROM_PTR(&mpu6050_cal_obj)},
+    {MP_ROM_QSTR(MP_QSTR_get_data), MP_ROM_PTR(&mpu6050_getdata_obj)},
+};
+static MP_DEFINE_CONST_DICT(mpu6050_locals_dict, mpu6050_locals_dict_table);
+
+// Overall module definition
+MP_DEFINE_CONST_OBJ_TYPE(
+    mpu6050_type,
+    MP_QSTR_mpu6050,
+    MP_TYPE_FLAG_NONE,
+    make_new, mpu6050_make_new,
+    locals_dict, &mpu6050_locals_dict
+);
+
+// Defining global constants
+static const mp_rom_map_elem_t mpu6050_module_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__) , MP_ROM_QSTR(MP_QSTR_mpu6050) },
+    { MP_ROM_QSTR(MP_QSTR_MPU6050), MP_ROM_PTR(&mpu6050_type) },
+};
+static MP_DEFINE_CONST_DICT(mpu6050_globals_table, mpu6050_module_globals_table);
+
+// Creating module object
+const mp_obj_module_t mpu6050_module = {
+    .base = {&mp_type_module},
+    .globals = (mp_obj_dict_t *)&mpu6050_globals_table,
+};
+
+MP_REGISTER_MODULE(MP_QSTR_mpu6050, mpu6050_module);

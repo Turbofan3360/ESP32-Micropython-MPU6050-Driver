@@ -28,6 +28,8 @@
 #define DMP_CTRL_3 0x6F
 
 // Constant definitions
+#define M_PI 3.141592654
+#define RAD_TO_DEG 180/M_PI
 #define DEFAULT_I2C_PORT_NUM -1
 #define MPU6050_I2C_ADDRESS 0x68
 #define NO_FW_BANKS 12
@@ -247,6 +249,8 @@ typedef struct {
 	uint8_t i2c_address;
 	i2c_master_bus_handle_t bus_handle;
 	i2c_master_dev_handle_t device_handle;
+
+    uint8_t raw_data[22];
 } mpu6050_obj_t;
 
 // Function declarations
@@ -256,6 +260,7 @@ static void log_func(const char* log_string);
 static void wait_micro_s(uint32_t micro_s_delay);
 static void write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text);
 static void read_from_register(mpu6050* self, uint8_t reg, uint8_t* output, char* error_text);
+static void mparray_to_float(mp_obj_t array, float* output);
 
 extern const mp_obj_type_t mpu6050_type;
 
