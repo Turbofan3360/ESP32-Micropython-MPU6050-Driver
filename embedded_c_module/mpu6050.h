@@ -26,6 +26,11 @@
 #define DMP_CTRL_1 0x6D
 #define DMP_CTRL_2 0x6E
 #define DMP_CTRL_3 0x6F
+#define INT_STAT_REG 0x3A
+#define COUNT_H_REG 0x72
+#define COUNT_L_REG 0x73
+#define FIFO_REG 0x74
+#define ACCEL_REG 0x3B
 
 // Constant definitions
 #define M_PI 3.141592654

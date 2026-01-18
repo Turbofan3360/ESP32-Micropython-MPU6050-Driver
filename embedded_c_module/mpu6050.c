@@ -123,7 +123,7 @@ mp_obj_t mpu6050_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw,
     self->i2c_address = MPU6050_I2C_ADDRESS;
 
     // 1ms delay to ensure the chip powers up properly
-    wait_micro_s(1000);
+    wait_micro_s(1e3);
 
     imu_setup(self);
 
@@ -139,7 +139,7 @@ static void IRAM_ATTR interrupt_handler(void* arg){
     return;
 }
 
-static void write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text){
+static uint8 write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text){
     /**
      * Utility to enable easy writes to MPU6050 config registers
      * Only writes single bytes of data
@@ -165,6 +165,40 @@ static void read_from_register(mpu6050* self, uint8_t reg, uint8_t* output, char
 
     if (err != ESP_OK){
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT(error_text));
+    }
+}
+
+static void wait_micro_s(uint32_t micro_s_delay){
+    /**
+     * Function to delay by a certain number of microseconds
+    */
+    uint64_t start = esp_timer_get_time();
+
+    while (esp_timer_get_time() - start < micro_s_delay){}
+
+    return;
+}
+
+static void log_func(const char* log_string){
+    /**
+     * Basic logging function - currently just prints to the REPL, but can be adapted to log to other places (e.g. log to a file) if needed
+    */
+    mp_printf(&mp_plat_print, "%s", log_string);
+}
+
+static void mparray_to_float(mp_obj_t array, float* output){
+    /**
+     * Converts from micropython array to an array of C floats
+     * Only gets 4 items as this is used to convert the quaternion orientation [qw, qx, qy, qz] into C floats
+    */
+    size_t len;
+    mp_obj_t *items;
+    int i;
+
+    mp_obj_get_array(array, &len, &items);
+
+    for (i=0; i < len; i++){
+        output[i] = mp_obj_get_float(items[i]);
     }
 }
 
@@ -209,7 +243,7 @@ static void write_dmp_firmware(mpu6050_obj_t* self){
             }
 
             // 1ms delay
-            wait_micro_s(1000)
+            wait_micro_s(1e3)
         }
     }
     return;
@@ -269,43 +303,77 @@ static void imu_setup(mpu6050_obj_t* self){
     return;
 }
 
-
-static void wait_micro_s(uint32_t micro_s_delay){
+static void update_data(mpu6050_obj_t* self){
     /**
-     * Function to delay by a certain number of microseconds
+     * Function to handle getting updated data from the sensor (if available) and store it in the object
     */
-    uint64_t start = esp_timer_get_time();
+    uint8_t reg_data, count_h, count_l, accel_data[6], i;
+    uint16_t count;
 
-    while (esp_timer_get_time() - start < micro_s_delay){}
+    // Checking new data is available
+    if (sensor_data_ready == 0){
+        return;
+    }
 
+    // Checking for FIFO overflow flag - if set, then reset the FIFO
+    read_from_register(self, INT_STAT_REG, &reg_data, "Unable to read interrupt status register");
+
+    if (reg_data & 0x10){
+        // Resetting FIFO *without* changing any other flags
+        read_from_register(self, USER_CTRL_REG, &reg_data, "Unable to read control register");
+        write_to_register(self, USER_CTRL_REG, reg_data | 0x04, "Unable to write to control register");
+
+        wait_micro_s(5e3);
+    }
+
+    // Finding number of bytes in FIFO
+    count_h = read_from_register(self, COUNT_H_REG, &count_h, "Unable to read FIFO counter register");
+    count_l = read_from_register(self, COUNT_L_REG, &count_l, "Unable to read FIFO counter register");
+
+    count = (count_h << 8) | count_l;
+
+    // Minumum data frame size is 28 bytes:
+    if (count < 28){
+        return;
+    }
+
+    // Assigning memory
+    uint8_t* fifo_data = malloc(count);
+
+    if (fifo_data == NULL){
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Unable to allocate memory"));
+    }
+
+    // Reading FIFO data
+    err = i2c_master_transmit_receive(self->device_handle, FIFO_REG, 1, fifo_data, count, 20);
+
+    if (err != ESP_OK){
+        free(fifo_data);
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Unable to read FIFO data"));
+    }
+
+    // Reading accelerometer data
+    err = i2c_master_transmit_receive(self->device_handle, ACCEL_REG, 1, accel_data, 6, 20);
+
+    if (err != ESP_OK){
+        free(fifo_data);
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Unable to read FIFO data"));
+    }
+
+    // Saving data to self object
+    for (i = 0; i < 16; i++){
+        self->raw_data[i] = fifo_data[i];
+    }
+
+    for (i = 0; i < 6; i++){
+        self->raw_data[i+16] = accel_data[i];
+    }
+
+    // Updating sensor_data_ready flag
+    sensor_data_ready = 0;
+
+    free(fifo_data);
     return;
-}
-
-static void log_func(const char* log_string){
-    /**
-     * Basic logging function - currently just prints to the REPL, but can be adapted to log to other places (e.g. log to a file) if needed
-    */
-    mp_printf(&mp_plat_print, "%s", log_string);
-}
-
-static void mparray_to_float(mp_obj_t array, float* output){
-    /**
-     * Converts from micropython array to an array of C floats
-     * Only gets 4 items as this is used to convert the quaternion orientation [qw, qx, qy, qz] into C floats
-    */
-    size_t len;
-    mp_obj_t *items;
-    int i;
-
-    mp_obj_get_array(array, &len, &items);
-
-    if (len != 4){
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Expected 4 values in list/tuple"));
-    }
-
-    for (i=0; i < len; i++){
-        output[i] = mp_obj_get_float(items[i]);
-    }
 }
 
 static mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
