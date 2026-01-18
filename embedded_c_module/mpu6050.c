@@ -121,7 +121,7 @@ mp_obj_t mpu6050_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw,
     self->bus_handle = bus_handle;
     self->device_handle = device_handle;
     self->i2c_address = MPU6050_I2C_ADDRESS;
-    self->acx_cal = self->acx_cal = self->acx_cal = 0.0f;
+    self->acx_cal = self->acy_cal = self->acz_cal = 0.0f;
 
     memset(&self->raw_data, 0, 22);
 
@@ -142,11 +142,12 @@ static void IRAM_ATTR interrupt_handler(void* arg){
     return;
 }
 
-static uint8 write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text){
+static void write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text){
     /**
      * Utility to enable easy writes to MPU6050 config registers
      * Only writes single bytes of data
     */
+    esp_err_t err;
     uint8_t write_data[2] = {reg, data};
 
     // Writing data
@@ -157,14 +158,15 @@ static uint8 write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, c
     }
 }
 
-static void read_from_register(mpu6050* self, uint8_t reg, uint8_t* output, char* error_text){
+static void read_from_register(mpu6050_obj_t* self, uint8_t reg, uint8_t* output, char* error_text){
     /**
      * Utility to read 1 byte from a specific MPU6050 register
     */
+    esp_err_t err;
     uint8_t write[1] = {reg};
 
     // Reading data
-    err = i2c_master_transmit_receive(self->device_handle, write_whi, 1, output, 1, 20);
+    err = i2c_master_transmit_receive(self->device_handle, write, 1, output, 1, 20);
 
     if (err != ESP_OK){
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT(error_text));
@@ -246,7 +248,7 @@ static void write_dmp_firmware(mpu6050_obj_t* self){
             }
 
             // 1ms delay
-            wait_micro_s(1e3)
+            wait_micro_s(1e3);
         }
     }
     return;
@@ -256,7 +258,6 @@ static void imu_setup(mpu6050_obj_t* self){
     /**
      * Writes to all the required MPU6050 registers to set up the module properly
     */
-    uint8_t write_data[2];
     esp_err_t err;
 
     // Probing to check there's actually a device there
@@ -285,8 +286,12 @@ static void imu_setup(mpu6050_obj_t* self){
     // Configuring interrupts
     write_to_register(self, INT_CONFIG_REG, 0x90, "Unable to write to sensor configuration register");
 
+    log_func("IMU Configured");
+
     // Writing DMP firmware
     write_dmp_firmware(self);
+
+    log_func("DMP Firmware Written");
 
     // Writing DMP start byte
     write_to_register(self, DMP_FW_START_1, 0x04, "Unable to write to sensor configuration register");
@@ -303,6 +308,8 @@ static void imu_setup(mpu6050_obj_t* self){
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("I2C Connection Error - Bad return from 'MPU6050 WHO AM I' register"));
     }
 
+    log_func("DMP Started and ready");
+
     return;
 }
 
@@ -310,6 +317,7 @@ static void update_data(mpu6050_obj_t* self){
     /**
      * Function to handle getting updated data from the sensor (if available) and store it in the object
     */
+    esp_err_t err;
     uint8_t reg_data, count_h, count_l, accel_data[6], i;
     uint16_t count;
 
@@ -330,8 +338,8 @@ static void update_data(mpu6050_obj_t* self){
     }
 
     // Finding number of bytes in FIFO
-    count_h = read_from_register(self, COUNT_H_REG, &count_h, "Unable to read FIFO counter register");
-    count_l = read_from_register(self, COUNT_L_REG, &count_l, "Unable to read FIFO counter register");
+    read_from_register(self, COUNT_H_REG, &count_h, "Unable to read FIFO counter register");
+    read_from_register(self, COUNT_L_REG, &count_l, "Unable to read FIFO counter register");
 
     count = (count_h << 8) | count_l;
 
@@ -348,7 +356,7 @@ static void update_data(mpu6050_obj_t* self){
     }
 
     // Reading FIFO data
-    err = i2c_master_transmit_receive(self->device_handle, FIFO_REG, 1, fifo_data, count, 20);
+    err = i2c_master_transmit_receive(self->device_handle, (uint8_t*)FIFO_REG, 1, fifo_data, count, 20);
 
     if (err != ESP_OK){
         free(fifo_data);
@@ -356,7 +364,7 @@ static void update_data(mpu6050_obj_t* self){
     }
 
     // Reading accelerometer data
-    err = i2c_master_transmit_receive(self->device_handle, ACCEL_REG, 1, accel_data, 6, 20);
+    err = i2c_master_transmit_receive(self->device_handle, (uint8_t*)ACCEL_REG, 1, accel_data, 6, 20);
 
     if (err != ESP_OK){
         free(fifo_data);
@@ -435,12 +443,11 @@ static void round_accel(float* accel){
     *accel = accel_int/1000;
 }
 
-static mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
+mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
     /**
      * Utility to convert from quaternion to Euler angles (degr)ees)
      * Uses aerospace/NASA standard conversion sequence - Z-Y-X
     */
-    mpu6050_obj_t* self = MP_OBJ_TO_PTR(self_in);
     float quat[4], pitch, yaw, roll, arg;
 
     // Extracting quaternion
@@ -481,8 +488,8 @@ mp_obj_t local_accel_get_world_accel(mp_obj_t self_in, mp_obj_t l_accel_mp, mp_o
     float quat[4], l_accel[3], w_accel[3];
 
     // Extracting data arrays
-    mparray_to_float(quat_mp, &quat);
-    mparray_to_float(l_accel_mp, &l_accel);
+    mparray_to_float(quat_mp, quat);
+    mparray_to_float(l_accel_mp, l_accel);
 
     // Quaternion maths
     w_accel[0] = (quat[0]*quat[0]+quat[1]*quat[1]-quat[2]*quat[2]-quat[3]*quat[3])*l_accel[0] + 2*(quat[1]*quat[2]-quat[0]*quat[3])*l_accel[1] + 2*(quat[1]*quat[3]+quat[0]*quat[2])*l_accel[2];
@@ -500,10 +507,10 @@ mp_obj_t local_accel_get_world_accel(mp_obj_t self_in, mp_obj_t l_accel_mp, mp_o
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mpu6050_lac_wac_obj, local_accel_get_world_accel);
 
-mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
+mp_obj_t calibrate_imu(mp_obj_t self_in, mp_obj_t time_mp){
     /**
      * Micropython-exposed function to calculate accelerometer calibration values
-     * Does a coarse calibration for a user-defined number of seconds, before tuning calibration offsets
+     * Does a coarse calibration for a user-defined number of seconds, before fine-tuning calibration offsets
     */
     mpu6050_obj_t* self = MP_OBJ_TO_PTR(self_in);
     uint64_t time_limit_ns = mp_obj_get_uint(time_mp)*1e9;
@@ -511,6 +518,8 @@ mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
     float d_ax = 0, d_ay = 0, d_az = 0, ax, ay, az;
     uint64_t start = esp_timer_get_time();
     uint8_t samples_count = 0, ready = 0;
+
+    log_func("Calibrating - do not move sensor!");
 
     // COARSE CALIBRATION OFFSET CALCULATION
     // Loops for a certain amount of time
@@ -537,7 +546,9 @@ mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
     d_ay /= samples_count;
     d_az /= samples_count;
 
-    // SOFT CALIBRATION OFFSET TUNING
+    log_func("Coarse calibration complete");
+
+    // FINE CALIBRATION OFFSET TUNING
     while (ready != 3){
         update_data(self);
         ready = 0;
@@ -553,21 +564,21 @@ mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
         az += d_az;
 
         // Checking whether acceleration values are within tolerance - if not, fine tuning the calibration offsets
-        if (absf(ax) > CALIBRATION_TOLERANCE){
+        if (fabs(ax) > CALIBRATION_TOLERANCE){
             d_ax -= ax/CALIBRATION_DIVISOR;
         }
         else {
             ready ++;
         }
 
-        if (absf(ay) > CALIBRATION_TOLERANCE){
+        if (fabs(ay) > CALIBRATION_TOLERANCE){
             d_ay -= ay/CALIBRATION_DIVISOR;
         }
         else {
             ready ++;
         }
 
-        if (absf(az-9.81) > CALIBRATION_TOLERANCE){
+        if (fabs(az-9.81) > CALIBRATION_TOLERANCE){
             d_az -= (az-9.81)/CALIBRATION_DIVISOR;
         }
         else {
@@ -578,6 +589,8 @@ mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
+    log_func("Fine calibration complete");
+
     // Saving calibration values
     self->acx_cal = d_ax;
     self->acy_cal = d_ay;
@@ -585,7 +598,7 @@ mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
 
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_cal_obj, calibrate);
+static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_cal_obj, calibrate_imu);
 
 mp_obj_t get_data(mp_obj_t self_in){
     /**
@@ -599,7 +612,7 @@ mp_obj_t get_data(mp_obj_t self_in){
 
     // Decoding quaternion data into floats and normalizing it
     decode_quat(self->raw_data, &qw);
-    deocde_quat(self->raw_data + 4, &qx);
+    decode_quat(self->raw_data + 4, &qx);
     decode_quat(self->raw_data + 8, &qy);
     decode_quat(self->raw_data + 12, &qz);
 

@@ -34,7 +34,6 @@
 #define ACCEL_REG 0x3B
 
 // Constant definitions
-#define M_PI 3.141592654
 #define RAD_TO_DEG 180/M_PI
 #define DEFAULT_I2C_PORT_NUM -1
 #define MPU6050_I2C_ADDRESS 0x68
@@ -266,12 +265,12 @@ typedef struct {
 } mpu6050_obj_t;
 
 // Function declarations
-static void IRAM_ATTR interrupt_handler(void* arg);
+static void interrupt_handler(void* arg);
 static void imu_setup(mpu6050_obj_t* self);
 static void log_func(const char* log_string);
 static void wait_micro_s(uint32_t micro_s_delay);
 static void write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text);
-static void read_from_register(mpu6050* self, uint8_t reg, uint8_t* output, char* error_text);
+static void read_from_register(mpu6050_obj_t* self, uint8_t reg, uint8_t* output, char* error_text);
 static void mparray_to_float(mp_obj_t array, float* output);
 static void decode_quat(uint8_t* quat_item_start, float* output);
 static void decode_accel(uint8_t* accel_item_start, float* output);
