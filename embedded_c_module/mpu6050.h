@@ -13,6 +13,7 @@
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "freertos/timers.h"
 
 // Register addresses
 #define CONFIG_REG 0x1A
@@ -38,6 +39,8 @@
 #define DEFAULT_I2C_PORT_NUM -1
 #define MPU6050_I2C_ADDRESS 0x68
 #define NO_FW_BANKS 12
+#define CALIBRATION_TOLERANCE 0.005f
+#define CALIBRATION_DIVISOR 8
 
 // DMP FIRMWARE:
 const uint8_t dmp_firwave_v612[3062] = {

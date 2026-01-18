@@ -500,7 +500,91 @@ mp_obj_t local_accel_get_world_accel(mp_obj_t self_in, mp_obj_t l_accel_mp, mp_o
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(mpu6050_lac_wac_obj, local_accel_get_world_accel);
 
-mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time){}
+mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time_mp){
+    /**
+     * Micropython-exposed function to calculate accelerometer calibration values
+     * Does a coarse calibration for a user-defined number of seconds, before tuning calibration offsets
+    */
+    mpu6050_obj_t* self = MP_OBJ_TO_PTR(self_in);
+    uint64_t time_limit_ns = mp_obj_get_uint(time_mp)*1e9;
+
+    float d_ax = 0, d_ay = 0, d_az = 0, ax, ay, az;
+    uint64_t start = esp_timer_get_time();
+    uint8_t samples_count = 0, ready = 0;
+
+    // COARSE CALIBRATION OFFSET CALCULATION
+    // Loops for a certain amount of time
+    while ((esp_timer_get_time() - start) < time_limit_ns){
+        update_data(self);
+
+        // Decoding acceleration data into floats
+        decode_accel(self->raw_data + 16, &ax);
+        decode_accel(self->raw_data + 18, &ay);
+        decode_accel(self->raw_data + 20, &az);
+
+        // Adding values on to the offset total
+        d_ax += ax;
+        d_ay += ay;
+        d_az += az - 9.81;
+
+        samples_count++;
+
+        // Delay 10ms
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    d_ax /= samples_count;
+    d_ay /= samples_count;
+    d_az /= samples_count;
+
+    // SOFT CALIBRATION OFFSET TUNING
+    while (ready != 3){
+        update_data(self);
+        ready = 0;
+
+        // Decoding acceleration data into floats
+        decode_accel(self->raw_data + 16, &ax);
+        decode_accel(self->raw_data + 18, &ay);
+        decode_accel(self->raw_data + 20, &az);
+
+        // Adding calibration values to acceleration values
+        ax += d_ax;
+        ay += d_ay;
+        az += d_az;
+
+        // Checking whether acceleration values are within tolerance - if not, fine tuning the calibration offsets
+        if (absf(ax) > CALIBRATION_TOLERANCE){
+            d_ax -= ax/CALIBRATION_DIVISOR;
+        }
+        else {
+            ready ++;
+        }
+
+        if (absf(ay) > CALIBRATION_TOLERANCE){
+            d_ay -= ay/CALIBRATION_DIVISOR;
+        }
+        else {
+            ready ++;
+        }
+
+        if (absf(az-9.81) > CALIBRATION_TOLERANCE){
+            d_az -= (az-9.81)/CALIBRATION_DIVISOR;
+        }
+        else {
+            ready ++;
+        }
+
+        // Delay 10ms
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    // Saving calibration values
+    self->acx_cal = d_ax;
+    self->acy_cal = d_ay;
+    self->acz_cal = d_az;
+
+    return mp_const_none;
+}
 static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_cal_obj, calibrate);
 
 mp_obj_t get_data(mp_obj_t self_in){
