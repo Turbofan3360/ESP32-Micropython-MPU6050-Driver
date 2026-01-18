@@ -256,6 +256,10 @@ typedef struct {
 	i2c_master_dev_handle_t device_handle;
 
     uint8_t raw_data[22];
+
+    float acx_cal;
+    float acy_cal;
+    float acz_cal;
 } mpu6050_obj_t;
 
 // Function declarations
@@ -266,6 +270,11 @@ static void wait_micro_s(uint32_t micro_s_delay);
 static void write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text);
 static void read_from_register(mpu6050* self, uint8_t reg, uint8_t* output, char* error_text);
 static void mparray_to_float(mp_obj_t array, float* output);
+static void decode_quat(uint8_t* quat_item_start, float* output);
+static void decode_accel(uint8_t* accel_item_start, float* output);
+static void normalize_quat(float* qw, float* qx, float* qy, float* qz);
+static void laccel_subtract_gravity(float* lax, float* lay, float* laz, float qw, float qx, float qy, float qz);
+static void round_accel(float* accel);
 
 extern const mp_obj_type_t mpu6050_type;
 

@@ -121,6 +121,9 @@ mp_obj_t mpu6050_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw,
     self->bus_handle = bus_handle;
     self->device_handle = device_handle;
     self->i2c_address = MPU6050_I2C_ADDRESS;
+    self->acx_cal = self->acx_cal = self->acx_cal = 0.0f;
+
+    memset(&self->raw_data, 0, 22);
 
     // 1ms delay to ensure the chip powers up properly
     wait_micro_s(1e3);
@@ -376,6 +379,62 @@ static void update_data(mpu6050_obj_t* self){
     return;
 }
 
+static void decode_quat(uint8_t* quat_item_start, float* output){
+    /**
+     * Utility that takes in a pointer to the start of a piece of quaternion data and outputs a float quaternion value
+    */
+    int32_t quat_int = (*quat_item_start << 24) | (*(quat_item_start + 1) << 16) | (*(quat_item_start + 2) << 8) | *(quat_item_start + 3);
+
+    *output = quat_int/1073741824;
+}
+
+static void decode_accel(uint8_t* accel_item_start, float* output){
+    /**
+     * Utility that takes in a pointer to the start of a piece of acceleration data and outputs a float acceleration value
+     * in meters per second
+    */
+    int16_t accel_int = (*accel_item_start << 8) | *(accel_item_start + 1);
+
+    *output = accel_int/16384;
+    *output *= 9.81;
+}
+
+static void normalize_quat(float* qw, float* qx, float* qy, float* qz){
+    /**
+     * Utility to normalize a quaternion
+    */
+    float mag_quat = sqrtf((*qw)*(*qw) + (*qx)*(*qx) + (*qy)*(*qy) + (*qz)*(*qz));
+
+    *qw /= mag_quat;
+    *qx /= mag_quat;
+    *qy /= mag_quat;
+    *qz /= mag_quat;
+}
+
+static void laccel_subtract_gravity(float* lax, float* lay, float* laz, float qw, float qx, float qy, float qz){
+    /**
+     * Utility that rotates the gravity vector into the local reference frame, to then subtract gravity from acceleration readings
+    */
+    float gx, gy, gz;
+
+    gx = 19.62*(qx*qz + (qw*qy));
+    gy = 19.62*(qy*qz - qw*qx);
+    gz = 9.81*(qw*qw - qx*qx - qy*qy + qz*qz);
+
+    *lax -= gx;
+    *lay -= gy;
+    *laz -= gz;
+}
+
+static void round_accel(float* accel){
+    /**
+     * Utility to round acceleration values to 3.d.p (i.e. 1mm/s^2)
+    */
+    int16_t accel_int = (int16_t)((*accel)*1000 + 0.5);
+
+    *accel = accel_int/1000;
+}
+
 static mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
     /**
      * Utility to convert from quaternion to Euler angles (degr)ees)
@@ -444,8 +503,60 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mpu6050_lac_wac_obj, local_accel_get_world_acce
 mp_obj_t calibrate(mp_obj_t self_in, mp_obj_t time){}
 static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_cal_obj, calibrate);
 
-mp_obj_t get_data(mp_obj_t self_in){}
-static MP_DEFINE_CONST_FUN_OBJ_2(mpu6050_getdata_obj, get_data);
+mp_obj_t get_data(mp_obj_t self_in){
+    /**
+     * Micropython-exposed function to return quaternion and local reference frame acceleration data
+     * Local acceleration data is gravity-subtracted
+    */
+    mpu6050_obj_t* self = MP_OBJ_TO_PTR(self_in);
+    float qw, qx, qy, qz, lax, lay, laz;
+
+    update_data(self);
+
+    // Decoding quaternion data into floats and normalizing it
+    decode_quat(self->raw_data, &qw);
+    deocde_quat(self->raw_data + 4, &qx);
+    decode_quat(self->raw_data + 8, &qy);
+    decode_quat(self->raw_data + 12, &qz);
+
+    normalize_quat(&qw, &qx, &qy, &qz);
+
+    // Decoding acceleration data into floats
+    decode_accel(self->raw_data + 16, &lax);
+    decode_accel(self->raw_data + 18, &lay);
+    decode_accel(self->raw_data + 20, &laz);
+
+    // Adding calibration values to acceleration values
+    lax += self->acx_cal;
+    lay += self->acy_cal;
+    laz += self->acz_cal;
+
+    // Subtracting gravity from readings
+    laccel_subtract_gravity(&lax, &lay, &laz, qw, qx, qy, qz);
+
+    // Rounding acceleration values to 3.d.p. (i.e. 1mm/s^2)
+    round_accel(&lax);
+    round_accel(&lay);
+    round_accel(&laz);
+
+    // Creating micropython list to return
+    mp_obj_t ret_quat[4], ret_laccel[3], ret_list[2];
+
+    ret_quat[0] = mp_obj_new_float(qw);
+    ret_quat[1] = mp_obj_new_float(qx);
+    ret_quat[2] = mp_obj_new_float(qy);
+    ret_quat[3] = mp_obj_new_float(qz);
+
+    ret_laccel[0] = mp_obj_new_float(lax);
+    ret_laccel[1] = mp_obj_new_float(lay);
+    ret_laccel[2] = mp_obj_new_float(laz);
+
+    ret_list[0] = mp_obj_new_list(4, ret_quat);
+    ret_list[1] = mp_obj_new_list(3, ret_laccel);
+
+    return mp_obj_new_list(2, ret_list);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mpu6050_getdata_obj, get_data);
 
 /**
  * Code here exposes the module functions above to micropython as an object
