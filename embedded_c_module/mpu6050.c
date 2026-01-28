@@ -437,9 +437,9 @@ static void laccel_subtract_gravity(float* lax, float* lay, float* laz, float qw
     */
     float gx, gy, gz;
 
-    gx = 19.62*(qx*qz + (qw*qy));
-    gy = 19.62*(qy*qz - qw*qx);
-    gz = 9.81*(qw*qw - qx*qx - qy*qy + qz*qz);
+    gx = 19.62f*(qx*qz + (qw*qy));
+    gy = 19.62f*(qy*qz - qw*qx);
+    gz = 9.81f*(qw*qw - qx*qx - qy*qy + qz*qz);
 
     *lax -= gx;
     *lay -= gy;
@@ -450,9 +450,9 @@ static void round_accel(float* accel){
     /**
      * Utility to round acceleration values to 3.d.p (i.e. 1mm/s^2)
     */
-    int16_t accel_int = (int16_t)((*accel)*1000 + 0.5);
+    int16_t accel_int = (int16_t)((*accel)*1000.0f + 0.5f);
 
-    *accel = accel_int/1000;
+    *accel = accel_int/1000.0f;
 }
 
 mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
