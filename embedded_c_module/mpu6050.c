@@ -4,6 +4,15 @@
 // 'volatile' meaning data can change outside of normal program flow
 static volatile uint8_t sensor_data_ready = 0;
 
+static void IRAM_ATTR interrupt_handler(void* arg){
+    /**
+     * Interrupt handler for the MPU6050 - just sets a flag to know that data is available
+    */
+    sensor_data_ready = 1;
+
+    return;
+}
+
 mp_obj_t mpu6050_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args){
     /**
      * This function initialises a new driver instance. It initialises the I2C bus and adds the IMU to it
@@ -133,15 +142,6 @@ mp_obj_t mpu6050_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw,
     return MP_OBJ_FROM_PTR(self);
 }
 
-static void IRAM_ATTR interrupt_handler(void* arg){
-    /**
-     * Interrupt handler for the MPU6050 - just sets a flag to know that data is available
-    */
-    sensor_data_ready = 1;
-
-    return;
-}
-
 static void write_to_register(mpu6050_obj_t* self, uint8_t reg, uint8_t data, char* error_text){
     /**
      * Utility to enable easy writes to MPU6050 config registers
@@ -215,7 +215,7 @@ static void write_dmp_firmware(mpu6050_obj_t* self){
     uint16_t byte_offset, limit;
 
     // Iterating through firmware banks
-    for (bank = 0; bank < NO_FW_BANKS - 1; bank++){
+    for (bank = 0; bank < NO_FW_BANKS; bank++){
         // Writing firmware bank number
         write_to_register(self, DMP_CTRL_1, bank, "Failed to write DMP firmware bank number");
 
@@ -247,8 +247,8 @@ static void write_dmp_firmware(mpu6050_obj_t* self){
                 byte_offset ++;
             }
 
-            // 1ms delay
-            wait_micro_s(1e3);
+            // 5ms delay
+            wait_micro_s(5e3);
         }
     }
     return;
@@ -266,6 +266,16 @@ static void imu_setup(mpu6050_obj_t* self){
     if (err != ESP_OK){
         mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("MPU6050 device not found on I2C bus: %s"), esp_err_to_name(err));
     }
+
+    // Waking up the MPU6050
+    write_to_register(self, PWR_MGMNT, 0x80, "Unable to wake MPU6050");
+    vTaskDelay(pdMS_TO_TICKS(50));
+    write_to_register(self, PWR_MGMNT, 0x00, "Unable to wake MPU6050");
+    write_to_register(self, PWR_MGMNT_2, 0x00, "Unable to wake MPU6050");
+
+    // Setting accelerometer scalar to 2g, gyro scalar to 2000deg/s
+    write_to_register(self, ACCEL_CONFIG_REG, 0x00, "Unable to write accelerometer scalars");
+    write_to_register(self, GYRO_CONFIG_REG, 0x18, "Unable to write gyroscope scalars");
 
     // Setting DLPF to 42Hz (gyros) and 44Hz (accel)
     write_to_register(self, CONFIG_REG, 0x03, "Unable to write to sensor configuration register");
@@ -286,12 +296,12 @@ static void imu_setup(mpu6050_obj_t* self){
     // Configuring interrupts
     write_to_register(self, INT_CONFIG_REG, 0x90, "Unable to write to sensor configuration register");
 
-    log_func("IMU Configured");
+    log_func("IMU Configured\n");
 
     // Writing DMP firmware
     write_dmp_firmware(self);
 
-    log_func("DMP Firmware Written");
+    log_func("DMP Firmware Written\n");
 
     // Writing DMP start byte
     write_to_register(self, DMP_FW_START_1, 0x04, "Unable to write to sensor configuration register");
@@ -308,7 +318,7 @@ static void imu_setup(mpu6050_obj_t* self){
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("I2C Connection Error - Bad return from 'MPU6050 WHO AM I' register"));
     }
 
-    log_func("DMP Started and ready");
+    log_func("DMP Started and ready\n");
 
     return;
 }
@@ -318,7 +328,7 @@ static void update_data(mpu6050_obj_t* self){
      * Function to handle getting updated data from the sensor (if available) and store it in the object
     */
     esp_err_t err;
-    uint8_t reg_data, count_h, count_l, accel_data[6], i;
+    uint8_t reg_data, count_h, count_l, accel_data[6], i, write_reg[1];
     uint16_t count;
 
     // Checking new data is available
@@ -356,7 +366,8 @@ static void update_data(mpu6050_obj_t* self){
     }
 
     // Reading FIFO data
-    err = i2c_master_transmit_receive(self->device_handle, (uint8_t*)FIFO_REG, 1, fifo_data, count, 20);
+    write_reg[0] = FIFO_REG;
+    err = i2c_master_transmit_receive(self->device_handle, write_reg, 1, fifo_data, count, 20);
 
     if (err != ESP_OK){
         free(fifo_data);
@@ -364,7 +375,8 @@ static void update_data(mpu6050_obj_t* self){
     }
 
     // Reading accelerometer data
-    err = i2c_master_transmit_receive(self->device_handle, (uint8_t*)ACCEL_REG, 1, accel_data, 6, 20);
+    write_reg[0] = ACCEL_REG;
+    err = i2c_master_transmit_receive(self->device_handle, write_reg, 1, accel_data, 6, 20);
 
     if (err != ESP_OK){
         free(fifo_data);
@@ -393,7 +405,7 @@ static void decode_quat(uint8_t* quat_item_start, float* output){
     */
     int32_t quat_int = (*quat_item_start << 24) | (*(quat_item_start + 1) << 16) | (*(quat_item_start + 2) << 8) | *(quat_item_start + 3);
 
-    *output = quat_int/1073741824;
+    *output = quat_int/1073741824.0f;
 }
 
 static void decode_accel(uint8_t* accel_item_start, float* output){
@@ -403,8 +415,8 @@ static void decode_accel(uint8_t* accel_item_start, float* output){
     */
     int16_t accel_int = (*accel_item_start << 8) | *(accel_item_start + 1);
 
-    *output = accel_int/16384;
-    *output *= 9.81;
+    *output = accel_int/16384.0f;
+    *output *= 9.81f;
 }
 
 static void normalize_quat(float* qw, float* qx, float* qy, float* qz){
@@ -453,6 +465,8 @@ mp_obj_t quat_to_euler(mp_obj_t self_in, mp_obj_t quat_mp){
     // Extracting quaternion
     mparray_to_float(quat_mp, quat);
 
+    normalize_quat(quat, quat + 1, quat + 2, quat + 3);
+
     // Converting yaw/roll values
     yaw = atan2f(2*(quat[0]*quat[3] + quat[1]*quat[2]), 1-2*(quat[2]*quat[2]+quat[3]*quat[3]))*RAD_TO_DEG;
     roll = atan2f(2*(quat[0]*quat[1] + quat[2]*quat[3]), 1-2*(quat[1]*quat[1] + quat[2]*quat[2]))*RAD_TO_DEG;
@@ -491,6 +505,8 @@ mp_obj_t local_accel_get_world_accel(mp_obj_t self_in, mp_obj_t l_accel_mp, mp_o
     mparray_to_float(quat_mp, quat);
     mparray_to_float(l_accel_mp, l_accel);
 
+    normalize_quat(quat, quat + 1, quat + 2, quat + 3);
+
     // Quaternion maths
     w_accel[0] = (quat[0]*quat[0]+quat[1]*quat[1]-quat[2]*quat[2]-quat[3]*quat[3])*l_accel[0] + 2*(quat[1]*quat[2]-quat[0]*quat[3])*l_accel[1] + 2*(quat[1]*quat[3]+quat[0]*quat[2])*l_accel[2];
     w_accel[1] = 2*(quat[1]*quat[2]+quat[0]*quat[3])*l_accel[0] + (quat[0]*quat[0]-quat[1]*quat[1]+quat[2]*quat[2]-quat[3]*quat[3])*l_accel[1] + 2*(quat[2]*quat[3]-quat[0]*quat[1])*l_accel[2];
@@ -519,7 +535,7 @@ mp_obj_t calibrate_imu(mp_obj_t self_in, mp_obj_t time_mp){
     uint64_t start = esp_timer_get_time();
     uint8_t samples_count = 0, ready = 0;
 
-    log_func("Calibrating - do not move sensor!");
+    log_func("Calibrating - do not move sensor!\n");
 
     // COARSE CALIBRATION OFFSET CALCULATION
     // Loops for a certain amount of time
@@ -546,7 +562,7 @@ mp_obj_t calibrate_imu(mp_obj_t self_in, mp_obj_t time_mp){
     d_ay /= samples_count;
     d_az /= samples_count;
 
-    log_func("Coarse calibration complete");
+    log_func("Coarse calibration complete\n");
 
     // FINE CALIBRATION OFFSET TUNING
     while (ready != 3){
@@ -589,7 +605,7 @@ mp_obj_t calibrate_imu(mp_obj_t self_in, mp_obj_t time_mp){
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    log_func("Fine calibration complete");
+    log_func("Fine calibration complete\n");
 
     // Saving calibration values
     self->acx_cal = d_ax;

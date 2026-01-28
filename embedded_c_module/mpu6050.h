@@ -16,7 +16,11 @@
 #include "freertos/timers.h"
 
 // Register addresses
+#define PWR_MGMNT 0x6B
+#define PWR_MGMNT_2 0x6C
 #define CONFIG_REG 0x1A
+#define ACCEL_CONFIG_REG 0x1C
+#define GYRO_CONFIG_REG 0x1B
 #define SAMPLERATE_DIV_REG 0x19
 #define FIFO_EN_REG 0x23
 #define USER_CTRL_REG 0x6A
