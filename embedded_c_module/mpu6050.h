@@ -43,7 +43,7 @@
 #define MPU6050_I2C_ADDRESS 0x68
 #define NO_FW_BANKS 12
 #define CALIBRATION_TOLERANCE 0.005f
-#define CALIBRATION_DIVISOR 8
+#define CALIBRATION_DIVISOR 8.0f
 
 // DMP FIRMWARE:
 const uint8_t dmp_firwave_v612[3062] = {

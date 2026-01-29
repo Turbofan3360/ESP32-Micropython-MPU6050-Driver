@@ -529,7 +529,7 @@ mp_obj_t calibrate_imu(mp_obj_t self_in, mp_obj_t time_mp){
      * Does a coarse calibration for a user-defined number of seconds, before fine-tuning calibration offsets
     */
     mpu6050_obj_t* self = MP_OBJ_TO_PTR(self_in);
-    uint64_t time_limit_ns = mp_obj_get_uint(time_mp)*1e9;
+    uint64_t time_limit_ns = mp_obj_get_uint(time_mp)*1e6;
 
     float d_ax = 0, d_ay = 0, d_az = 0, ax, ay, az;
     uint64_t start = esp_timer_get_time();
@@ -594,8 +594,8 @@ mp_obj_t calibrate_imu(mp_obj_t self_in, mp_obj_t time_mp){
             ready ++;
         }
 
-        if (fabs(az-9.81) > CALIBRATION_TOLERANCE){
-            d_az -= (az-9.81)/CALIBRATION_DIVISOR;
+        if (fabs(az-9.81f) > CALIBRATION_TOLERANCE){
+            d_az -= (az-9.81f)/CALIBRATION_DIVISOR;
         }
         else {
             ready ++;
