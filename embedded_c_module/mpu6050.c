@@ -450,7 +450,12 @@ static void round_accel(float* accel){
     /**
      * Utility to round acceleration values to 3.d.p (i.e. 1mm/s^2)
     */
-    int16_t accel_int = (int16_t)((*accel)*1000.0f + 0.5f);
+    if (*accel > 0){
+        int16_t accel_int = (int16_t)((*accel)*1000.0f + 0.5f);
+    }
+    else {
+        int16_t accel_int = (int_16t)((*accel)*1000.0f - 0.5f);
+    }
 
     *accel = accel_int/1000.0f;
 }
